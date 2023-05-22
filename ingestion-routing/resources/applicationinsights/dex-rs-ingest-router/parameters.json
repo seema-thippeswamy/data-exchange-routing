@@ -1,0 +1,12 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentParameters.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "components_dex_rs_ingest_router_name": {
+            "value": null
+        },
+        "workspaces_DefaultWorkspace_ea443012_82c8_442f_9236_f6b19b52c053_EUS_externalid": {
+            "value": null
+        }
+    }
+}
