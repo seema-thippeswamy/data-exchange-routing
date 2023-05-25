@@ -8,6 +8,7 @@ import com.microsoft.durabletask.azurefunctions.DurableOrchestrationTrigger
 
 import gov.cdc.dex.csv.dtos.ActivityInput
 import gov.cdc.dex.csv.dtos.ActivityOutput
+import gov.cdc.dex.csv.dtos.FanInActivityInput
 import gov.cdc.dex.csv.dtos.FunctionDefinition
 import gov.cdc.dex.csv.dtos.OrchestratorInput
 import gov.cdc.dex.csv.dtos.OrchestratorOutput
@@ -17,6 +18,7 @@ import gov.cdc.dex.csv.dtos.OrchestratorConfiguration
 class FnOrchestrator {
     companion object{
         private val defaultErrorName = "DexCsvDefaultError"
+        private val defaultFanInName = "DexCsvDefaultFanIn"
     }
 
     @FunctionName("DexCsvOrchestrator")
@@ -26,70 +28,74 @@ class FnOrchestrator {
         val input = ctx.getInput(OrchestratorInput::class.java)
         val configuration = input.config
 
-        var nextParamMap = input.initialParamMap
+        val globalParamMap = input.initialParams.toMutableMap()
 
         for(step in configuration.steps){
-            val stepOutput = runStep(ctx, step, nextParamMap)
+            val stepInput = ActivityInput(step.stepNumber, step.functionToRun.functionConfiguration, globalParamMap)
+            val stepOutput = runActivity(ctx, step.functionToRun.functionName, stepInput)
+            
+            val errorMessage = if(stepOutput.errorMessage!=null){
+                stepOutput.errorMessage
+            }else if(step.fanOutSteps != null && stepOutput.newFanOutParams == null){
+                "Tried to fan out but function did not return correct parameters"
+            }else{
+                null
+            }
 
-            val errorMessage = handleErrors(ctx, step, stepOutput)
             if(errorMessage != null){
-                return OrchestratorOutput(input, errorMessage, step.stepNumber)
+                runError(ctx, step, globalParamMap, errorMessage)
+                return OrchestratorOutput(globalParamMap, errorMessage, step.stepNumber)
             }
     
-            if(step.fanOutSteps !=null){
+            val newGlobalParams = if(step.fanOutSteps !=null){
                 //fanned out params being null was already checked in the error handling
 
                 val parallelTasks:MutableList<Task<OrchestratorOutput>> = mutableListOf()
-                for(fannedOutParamMap in stepOutput.fanOutNewParamMaps!!){
-                    val subInput = OrchestratorInput(OrchestratorConfiguration(step.fanOutSteps), fannedOutParamMap)
-                    parallelTasks.add(ctx.callSubOrchestrator("DexCsvOrchestrator",subInput, OrchestratorOutput::class.java))
+                for(fannedOutParamMap in stepOutput.newFanOutParams!!){
+                    val subMap = mutableMapOf<String,String>()
+                    subMap.putAll(globalParamMap)
+                    subMap.putAll(fannedOutParamMap)
+                    val subInput = OrchestratorInput(OrchestratorConfiguration(step.fanOutSteps), subMap)
+                    parallelTasks.add(ctx.callSubOrchestrator("DexCsvOrchestrator", subInput, OrchestratorOutput::class.java))
                 }
                 val subOutputs = ctx.allOf(parallelTasks).await()
 
-                //TODO fan in
-                //if not fan in, check to make sure no more steps are defined
+                val fanInFunction = step.customFanInFunction ?: FunctionDefinition(defaultFanInName)
+                val fanInInput = FanInActivityInput(step.stepNumber, fanInFunction.functionConfiguration, subOutputs)
+                val fanInOutput = runActivity(ctx, fanInFunction.functionName, fanInInput)
+
+                if(fanInOutput.errorMessage != null){
+                    runError(ctx, step, globalParamMap, fanInOutput.errorMessage)
+                    return OrchestratorOutput(globalParamMap, errorMessage, step.stepNumber)
+                }
+                
+                fanInOutput.newGlobalParams
             }else{
-                //params being null was already checked in the error handling
-                nextParamMap = stepOutput.newParamMap!!
+                stepOutput.newGlobalParams
             }
 
+            if(newGlobalParams != null){
+                globalParamMap.putAll(newGlobalParams)
+            }
         }
-        return OrchestratorOutput(input=input)
+        return OrchestratorOutput(outputParams=globalParamMap)
     }
 
-    private fun runStep(ctx:TaskOrchestrationContext, step:OrchestratorStep, paramMap:Map<String,String>):ActivityOutput{
-        val stepInput = ActivityInput(step.stepNumber,step.functionToRun.functionConfiguration, paramMap)
-        val stepOutput = try{ 
-            //TODO handle fan-out and fan-in
-            val stepOutput = ctx.callActivity(step.functionToRun.functionName, stepInput, ActivityOutput::class.java).await()
-
-            stepOutput
+    private fun runActivity(ctx:TaskOrchestrationContext, functionName:String, activityInput:Any)
+    :ActivityOutput{
+        val activityOutput = try{ 
+            ctx.callActivity(functionName, activityInput, ActivityOutput::class.java).await()
         }catch(e:Exception){
             //TODO somehow log the exception, still need to figure this out
-            ActivityOutput(stepInput, e.localizedMessage)
+            ActivityOutput(errorMessage = e.localizedMessage, newGlobalParams = mapOf())
         }
-        return stepOutput;
+        return activityOutput;
     }
 
-    private fun handleErrors(ctx:TaskOrchestrationContext, step:OrchestratorStep, stepOutput:ActivityOutput):String?{
-        val errorMessage = if(stepOutput.errorMessage!=null){
-            stepOutput.errorMessage
-        }else if(step.fanOutSteps != null && stepOutput.fanOutNewParamMaps == null){
-            "Tried to fan out but function did not return correct parameters"
-        }else if(step.fanOutSteps == null && stepOutput.newParamMap == null){
-            "Function did not return parameters for next step in pipeline"
-        }else{
-            null
-        }
-
-        if(errorMessage != null){
-            val errorFunction = step.customErrorFunction ?: FunctionDefinition(defaultErrorName,mapOf())
-            val errorParamMap = stepOutput.input.paramMap.toMutableMap()
-            errorParamMap.put("errorMessage", errorMessage)
-            val errorInput = ActivityInput(step.stepNumber, errorFunction.functionConfiguration, errorParamMap)
-            
-            ctx.callActivity(errorFunction.functionName, errorInput).await()
-        }
-        return errorMessage
+    private fun runError(ctx:TaskOrchestrationContext, step:OrchestratorStep, globalParamMap:MutableMap<String,String>, errorMessage:String){
+        globalParamMap.put("errorMessage", errorMessage)
+        val errorFunction = step.customErrorFunction ?: FunctionDefinition(defaultErrorName)
+        val errorInput = ActivityInput(step.stepNumber, errorFunction.functionConfiguration, globalParamMap)
+        runActivity(ctx, errorFunction.functionName, errorInput)
     }
 }

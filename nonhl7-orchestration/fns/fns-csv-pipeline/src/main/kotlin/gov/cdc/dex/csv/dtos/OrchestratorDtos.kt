@@ -1,8 +1,14 @@
 package gov.cdc.dex.csv.dtos
 
 data class OrchestratorInput(
-    val config      : OrchestratorConfiguration,
-    val initialParamMap    : Map<String,String>
+    val config          : OrchestratorConfiguration,
+    val initialParams   : Map<String,String>
+)
+
+data class OrchestratorOutput (
+    val outputParams    : Map<String,String>,
+    val errorMessage    : String? = null,
+    val failedStep      : String? = null
 )
 
 data class OrchestratorConfiguration (
@@ -10,14 +16,14 @@ data class OrchestratorConfiguration (
 )
 
 data class OrchestratorStep (
-    val stepNumber              : Int,
+    val stepNumber              : String,
     val functionToRun           : FunctionDefinition,
     val customErrorFunction     : FunctionDefinition?,
     val fanOutSteps             : List<OrchestratorStep>?,
-    val fanInFunction           : FunctionDefinition?
+    val customFanInFunction     : FunctionDefinition?
 )
 
 data class FunctionDefinition(
     val functionName            : String,
-    val functionConfiguration   : Map<String,String>
+    val functionConfiguration   : Any? = null
 )
