@@ -19,8 +19,8 @@ data class OrchestratorStep (
     val stepNumber              : String,
     val functionToRun           : FunctionDefinition,
     val customErrorFunction     : FunctionDefinition?,
-    val fanOutSteps             : List<OrchestratorStep>?,
-    val customFanInFunction     : FunctionDefinition?
+    val fanOutAfter             : Boolean? = null,
+    val fanInBefore             : Boolean? = null
 )
 
 data class FunctionDefinition(
