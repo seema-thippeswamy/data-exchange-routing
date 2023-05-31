@@ -1,9 +1,9 @@
 {
   "IsEncrypted": false,
   "Values": {
-    "AzureWebJobsStorage": "",
+    "AzureWebJobsStorage": "**scrubbed**",
     "FUNCTIONS_WORKER_RUNTIME": "java",
-    "BlobtriggerConnection": "**scrubbed**",
+    "SourceBlobStorageConnection": "**scrubbed**",
     "DestinationBlobStorageConnection": "**scrubbed**"
   }
 }
