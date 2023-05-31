@@ -7,6 +7,7 @@
   },
   {
     "FileType": "HL7",
+    "MessageTypes": ["CASE","ELR"],
     "StagingLocations": {
       "DestinationContainer": "/data/HL7/staged"
     }
