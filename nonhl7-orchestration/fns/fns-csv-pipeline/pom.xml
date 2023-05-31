@@ -15,8 +15,9 @@
         <kotlin.version>1.7.20</kotlin.version>
 
         <azure.functions.maven.plugin.version>1.24.0</azure.functions.maven.plugin.version>
-        <azure.functions.java.library.version>3.0.0</azure.functions.java.library.version>
-		<durabletask.azure.functions>1.0.0</durabletask.azure.functions>
+		<azure.functions.java.library.version>3.0.0</azure.functions.java.library.version>
+		<durabletask.azure.functions.version>1.1.0</durabletask.azure.functions.version>
+		<jackson.module.kotlin.version>2.12.3</jackson.module.kotlin.version>
         
         <functionAppName>dex-csv-fn-app</functionAppName>
         <functionResourceGroup>cdc-modernization-dex</functionResourceGroup>
@@ -32,16 +33,21 @@
         </dependency>
         
         <!-- Azure -->
-        <dependency>
-            <groupId>com.microsoft.azure.functions</groupId>
-            <artifactId>azure-functions-java-library</artifactId>
-            <version>${azure.functions.java.library.version}</version>
-        </dependency>
+		<dependency>
+			<groupId>com.microsoft.azure.functions</groupId>
+			<artifactId>azure-functions-java-library</artifactId>
+			<version>${azure.functions.java.library.version}</version>
+		</dependency>
 		<dependency>
 			<groupId>com.microsoft</groupId>
 			<artifactId>durabletask-azure-functions</artifactId>
-			<version>${durabletask.azure.functions}</version>
+			<version>${durabletask.azure.functions.version}</version>
 		</dependency>
+        <dependency>
+            <groupId>com.fasterxml.jackson.module</groupId>
+            <artifactId>jackson-module-kotlin</artifactId>
+            <version>${jackson.module.kotlin.version}</version>
+        </dependency>
 
         <!-- Test -->
         <dependency>
