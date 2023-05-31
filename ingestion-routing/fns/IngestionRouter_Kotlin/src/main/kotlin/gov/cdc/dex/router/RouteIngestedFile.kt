@@ -25,7 +25,7 @@ import gov.cdc.dex.router.dtos.EventSchema
 class RouteIngestedFile {
     
     @FunctionName("RouteIngestedFile")
-    fun run_v1(
+    fun run(
         @EventGridTrigger(name = "event") eventContent:EventSchema,
         context: ExecutionContext
     ) {
@@ -71,6 +71,9 @@ class RouteIngestedFile {
         context.logger.info("Blob $sourceUrl has been routed to $destinationBlobName")
     }
 
+    /*
+    mimics the C# code as of 2023-05-31
+    */
     private fun getDestination_MessageType(name:String, messageType:String, routeConfigs:List<RouteConfig>, context: ExecutionContext):String?{
         var routeConfig = routeConfigs.firstOrNull { it.messageTypes.contains(messageType) }
         if (routeConfig == null) {
@@ -86,6 +89,10 @@ class RouteIngestedFile {
         return "$destinationRoute/$name"
     }
 
+    /*
+    mimics the C# code as of 2023-05-30
+    - with the additional message type in the folder path
+    */
     private fun getDestination_Extension(name:String, messageType:String, routeConfigs:List<RouteConfig>, context: ExecutionContext):String?{
         // Get file extension
         val fileExtension = File(name).extension
