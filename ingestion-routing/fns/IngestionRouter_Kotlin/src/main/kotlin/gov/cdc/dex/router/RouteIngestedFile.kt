@@ -10,25 +10,26 @@ import com.microsoft.azure.functions.ExecutionContext
 import com.azure.storage.blob.BlobServiceClient
 import com.azure.storage.blob.BlobServiceClientBuilder
 import com.azure.storage.blob.BlobClient
+import com.azure.storage.blob.BlobClientBuilder
 import com.azure.core.util.BinaryData
+import com.azure.core.credential.TokenCredential
+import com.azure.identity.DefaultAzureCredentialBuilder
 
 import java.io.File
 import java.io.BufferedInputStream
 import java.io.BufferedOutputStream
 
 import gov.cdc.dex.router.dtos.RouteConfig
+import gov.cdc.dex.router.dtos.EventSchema
 
 class RouteIngestedFile {
     
     @FunctionName("RouteIngestedFile")
     fun run_v1(
-        @EventGridTrigger(name = "event") eventContent:String,
+        @EventGridTrigger(name = "event") eventContent:EventSchema,
         context: ExecutionContext
     ) {
         context.logger.info("Function triggered for event $eventContent")
-
-        // Get source file name from event
-        val name = getSourceFileFromEvent(eventContent)
 
         // Load config
         val configJson = this::class.java.classLoader.getResource("fileconfigs.json")?.readText() // Assuming the fileconfigs.json is in the resources directory
@@ -36,31 +37,38 @@ class RouteIngestedFile {
             context.logger.severe("Config file is missing or empty, routing cannot continue.")
         }
         val routeConfigs = Gson().fromJson(configJson, Array<RouteConfig>::class.java).toList()
-
+        
         // Define source
-        val sourceContainerName = "filedump"
-        val sourceBlob = getBlob_ConnectionString("SourceBlobStorageConnection", sourceContainerName, name)
+        val sourceUrl = eventContent.data.url
+        val sourceCredential = DefaultAzureCredentialBuilder().build();
+        val sourceBlob = BlobClientBuilder().credential(sourceCredential).endpoint(sourceUrl).buildClient()
+
         val sourceMetadata = sourceBlob.properties.metadata
         val messageType = sourceMetadata.getOrDefault("message_type", "?")
         
         // Define destination
-        val destinationBlobName = getDestination_MessageType(name, messageType, routeConfigs, context)
+        val destinationBlobName = getDestination_MessageType(sourceBlob.blobName, messageType, routeConfigs, context)
         if(destinationBlobName == null){
             return
         }
         val destinationContainerName = "routedfiles"
-        val destinationBlob = getBlob_ConnectionString("DestinationBlobStorageConnection", destinationContainerName, destinationBlobName)
 
-        copyBlob_ConnectionString(sourceBlob, destinationBlob)
+        // val destinationConnection = System.getenv("DestinationBlobStorageConnection")
+        // val destinationBlobServiceClient = BlobServiceClientBuilder().connectionString(destinationConnection).buildClient()
+        val destinationCredential = DefaultAzureCredentialBuilder().build();
+        val destinationBlobEndpoint = System.getenv("DestinationBlobEndpoint")
+        val destinationBlobServiceClient = BlobServiceClientBuilder().endpoint(destinationBlobEndpoint).credential(destinationCredential).buildClient()
+
+        val destinationContainerClient = destinationBlobServiceClient.getBlobContainerClient(destinationContainerName)
+        val destinationBlob = destinationContainerClient.getBlobClient(destinationBlobName)
+
+        // Copy from source
+        destinationBlob.blockBlobClient.uploadFromUrl(sourceBlob.blobUrl)
 
         //Set metadata
         destinationBlob.setMetadata(sourceMetadata)
 
-        context.logger.info("Blob $name has been routed to $destinationBlobName")
-    }
-
-    private fun getSourceFileFromEvent(event:String):String{
-        return ""
+        context.logger.info("Blob $sourceUrl has been routed to $destinationBlobName")
     }
 
     private fun getDestination_MessageType(name:String, messageType:String, routeConfigs:List<RouteConfig>, context: ExecutionContext):String?{
@@ -101,34 +109,4 @@ class RouteIngestedFile {
         return "$destinationRoute/$messageType/$name"
     }
 
-    private fun getBlob_ConnectionString(connectionParam:String, containerName:String, blobName:String):BlobClient{
-        val blobConnection = System.getenv(connectionParam)
-        val blobServiceClient = BlobServiceClientBuilder().connectionString(blobConnection).buildClient();
-        val containerClient = blobServiceClient.getBlobContainerClient(containerName)
-        return containerClient.getBlobClient(blobName)
-    }
-
-    private fun copyBlob_ConnectionString(sourceBlob:BlobClient, destinationBlob:BlobClient){
-        BufferedInputStream(sourceBlob.openInputStream()).use{ fromStream ->
-            BufferedOutputStream(destinationBlob.blockBlobClient.getBlobOutputStream()).use{ toStream ->
-                val bytesIn = ByteArray(4096)
-                var read: Int
-                while (fromStream.read(bytesIn).also { read = it } != -1) {
-                    toStream.write(bytesIn, 0, read)
-                }
-            }
-        }
-    }
-
-    private fun getBlob_SasToken(sasTokenParam:String, endpointParam:String, containerName:String, blobName:String):BlobClient{
-        val blobSasToken = System.getenv(sasTokenParam)
-        val blobEndpoint = System.getenv(endpointParam)
-        val blobServiceClient = BlobServiceClientBuilder().endpoint(blobSasToken).sasToken(blobEndpoint).buildClient()
-        val containerClient = blobServiceClient.getBlobContainerClient(containerName)
-        return containerClient.getBlobClient(blobName)
-    }
-
-    private fun copyBlob_SasToken(sourceBlob:BlobClient, destinationBlob:BlobClient){
-        destinationBlob.blockBlobClient.uploadFromUrl(sourceBlob.blobUrl)
-    }
 }
