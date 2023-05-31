@@ -1,4 +1,5 @@
 using Azure.Storage.Blobs;
+using Azure.Storage.Blobs.Models;
 using IngestionRouter.Models;
 using Microsoft.Azure.WebJobs;
 using Microsoft.Extensions.Configuration;
@@ -20,49 +21,45 @@ public class RouteIngestedFile
     }
 
     [FunctionName("RouteIngestedFile")]
-    public async Task Run([BlobTrigger("filedump/{name}", Connection = "blobtriggerConnection")]Stream myBlob, string name, ILogger log, ExecutionContext context)
+    public async Task Run([BlobTrigger("filedump/{blobname}.{blobextension}", Connection = "blobtriggerConnection")] Stream myBlob, string blobName, string blobExtension, IDictionary<string, string> metaData, ILogger log, ExecutionContext context)
     {
-        log.LogInformation($"C# Blob trigger function Processed blob\n Name:{name} \n Size: {myBlob.Length} Bytes");
-
-        //Get File Extension
-        string fileExtension = Path.GetExtension(name);
-        if (string.IsNullOrEmpty(fileExtension) )
-        {
-            log.LogError($"File named {name} has no extension and cannot be routed.");
-            return;
-        }
+        log.LogInformation($"C# Blob trigger function Processed blob\n Name:{blobName}.{blobExtension} \n Size: {myBlob.Length} Bytes. Metadata: {JsonConvert.SerializeObject(metaData)}");
 
         //Load Config
         string configPath = Path.Combine(context.FunctionAppDirectory, "fileconfigs.json");
         string configJson = File.ReadAllText(configPath);
-        if (string.IsNullOrEmpty(configJson) )
+        if (string.IsNullOrEmpty(configJson))
         {
             log.LogError("Config file is empty, routing cannot continue");
             return;
         }
         List<RouteConfig> routeConfigs = JsonConvert.DeserializeObject<List<RouteConfig>>(configJson);
 
-        //Get Config for this Extension
-        RouteConfig routeConfig = routeConfigs.FirstOrDefault(x => x.FileType.ToUpper() == fileExtension.ToUpper().Replace(".",""));
+        //Get Config for this Message Type
+        string messageType = metaData.ContainsKey("message_type") ? metaData["message_type"] : "?";
+        RouteConfig routeConfig = routeConfigs.FirstOrDefault(x => x.MessageTypes.Contains(messageType));
         if (routeConfig is null)
         {
-            log.LogError($"No routing configured for files with a {fileExtension} extension. Will route to misc folder.");
+            log.LogError($"No routing configured for files with a {messageType} message type. Will route to misc folder.");
             routeConfig = routeConfigs.FirstOrDefault(x => x.FileType == "?");
         }
 
         //Define Destination
         string destinationRoute = routeConfig.StagingLocations["DestinationContainer"];
-        string destinationBlobName = $"{destinationRoute}/{name}";
+        string destinationBlobName = $"{destinationRoute}/{blobName}.{blobExtension}";
         string destinationContainerName = "routedfiles";
-        BlobServiceClient blobServiceClient = new BlobServiceClient(_configuration["DestinationBlobStorageConnection"]);
+        BlobServiceClient blobServiceClient = new(_configuration["DestinationBlobStorageConnection"]);
         BlobContainerClient containerClient = blobServiceClient.GetBlobContainerClient(destinationContainerName);
 
         //Build Source reference
         BlobClient blobClient = containerClient.GetBlobClient(destinationBlobName);
 
-        //Upload the file
-        await blobClient.UploadAsync(myBlob);
+        //Add Source Metadata to Destination
+        BlobUploadOptions blobUploadOptions = new() { Metadata = metaData };
 
-        log.LogInformation($"Blob {name} has been routed to {destinationBlobName}");
+        //Upload the file
+        await blobClient.UploadAsync(myBlob, blobUploadOptions);
+
+        log.LogInformation($"Blob {blobName}.{blobExtension} has been routed to {destinationBlobName}");
     }
 }
