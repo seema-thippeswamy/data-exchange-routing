@@ -1,0 +1,20 @@
+[
+  {
+    "FileType": "CSV",
+    "StagingLocations": {
+      "DestinationContainer": "/data/CSV/staged"
+    }
+  },
+  {
+    "FileType": "HL7",
+    "StagingLocations": {
+      "DestinationContainer": "/data/HL7/staged"
+    }
+  },
+  {
+    "FileType": "?",
+    "StagingLocations": {
+      "DestinationContainer": "/data/misc/staged"
+    }
+  }
+]

@@ -1,59 +1,72 @@
+package gov.cdc.dex.router
+
+import com.google.gson.Gson
+
+import com.microsoft.azure.functions.annotation.FunctionName
+import com.microsoft.azure.functions.annotation.BlobTrigger
+import com.microsoft.azure.functions.annotation.BindingName
+import com.microsoft.azure.functions.ExecutionContext
 import com.azure.storage.blob.BlobServiceClient
-import com.azure.storage.blob.BlobContainerClient
-import com.azure.storage.blob.BlobClient
-import com.microsoft.extensions.configuration.Configuration
-import com.microsoft.extensions.logging.Logger
-import com.microsoft.extensions.logging.LoggerFactory
-import com.microsoft.extensions.logging.LogLevel
-import com.microsoft.extensions.logging.LoggerFactoryExtensions.logError
-import com.microsoft.extensions.logging.LoggerFactoryExtensions.logInformation
+import com.azure.storage.blob.BlobServiceClientBuilder
+import com.azure.core.util.BinaryData
+
 import java.io.File
-import java.io.InputStream
 
-class RouteIngestedFile(private val configuration: Configuration) {
-private val logger: Logger = LoggerFactory.getLogger(RouteIngestedFile::class.java)
+import gov.cdc.dex.router.dtos.RouteConfig
 
+class RouteIngestedFile {
 
+    @FunctionName("DexCsvDecompressor")
+    fun run(
+        @BlobTrigger(name = "file",
+               dataType = "binary",
+               path = "filedump/{name}",
+               connection = "BlobtriggerConnection") myBlob:ByteArray ,
+        @BindingName("name")  name:String,
+        context: ExecutionContext
+    ) {
+        context.logger.info("Blob trigger function processed blob\nName: $name\nSize: ${myBlob.size} Bytes")
 
-suspend fun run(myBlob: InputStream, name: String) {
-    logger.logInformation("Blob trigger function processed blob\nName: $name\nSize: ${myBlob.available()} Bytes")
+        // Get file extension
+        val fileExtension = File(name).extension
+        if (fileExtension.isNullOrEmpty()) {
+            context.logger.severe("File named $name has no extension and cannot be routed.")
+            return
+        }
 
-    // Get file extension
-    val fileExtension = File(name).extension
-    if (fileExtension.isNullOrEmpty()) {
-        logger.logError("File named $name has no extension and cannot be routed.")
-        return
+        // Load config
+        val configJson = this::class.java.classLoader.getResource("fileconfigs.json")?.readText() // Assuming the fileconfigs.json is in the resources directory
+        if(configJson.isNullOrEmpty()){
+            context.logger.severe("Config file is missing or empty, routing cannot continue.")
+        }
+        val routeConfigs = Gson().fromJson(configJson, Array<RouteConfig>::class.java).toList()
+
+        // Get config for this extension
+        var routeConfig = routeConfigs.firstOrNull { it.fileType.equals(fileExtension, ignoreCase = true) }
+        if (routeConfig == null) {
+            context.logger.warning("No routing configured for files with a $fileExtension extension. Will route to misc folder.")
+            routeConfig = routeConfigs.firstOrNull { it.fileType == "?" }
+            if(routeConfig == null){
+                context.logger.severe("Config file does not define misc folder.")
+                return
+            }
+        }
+
+        // Define destination
+        val destinationRoute = routeConfig.stagingLocations.destinationContainer
+        val destinationBlobName = "$destinationRoute/$name"
+        val destinationContainerName = "routedfiles"
+        val destinationBlobConnection = System.getenv("DestinationBlobStorageConnection")
+
+        val blobServiceClient = BlobServiceClientBuilder().connectionString(destinationBlobConnection).buildClient();
+        val containerClient = blobServiceClient.getBlobContainerClient(destinationContainerName)
+
+        // Create new empty blob
+        val blobClient = containerClient.getBlobClient(destinationBlobName)
+
+        // Upload the file
+        blobClient.upload(BinaryData.fromBytes(myBlob))
+
+        context.logger.info("Blob $name has been routed to $destinationBlobName")
     }
-
-    // Load config
-    val configPath = "fileconfigs.json" // Assuming the fileconfigs.json is in the same directory
-    val configJson = File(configPath).readText()
-    if (configJson.isNullOrEmpty()) {
-        logger.logError("Config file is empty, routing cannot continue")
-        return
-    }
-    val routeConfigs = Gson().fromJson(configJson, Array<RouteConfig>::class.java).toList()
-
-    // Get config for this extension
-    val routeConfig = routeConfigs.firstOrNull { it.fileType.equals(fileExtension, ignoreCase = true) }
-        ?: routeConfigs.firstOrNull { it.fileType == "?" }
-    if (routeConfig == null) {
-        logger.logError("No routing configured for files with a $fileExtension extension. Will route to misc folder.")
-    }
-
-    // Define destination
-    val destinationRoute = routeConfig?.stagingLocations?.get("DestinationContainer")
-    val destinationBlobName = "$destinationRoute/$name"
-    val destinationContainerName = "routedfiles"
-    val blobServiceClient = BlobServiceClient(configuration["DestinationBlobStorageConnection"])
-    val containerClient = blobServiceClient.getBlobContainerClient(destinationContainerName)
-
-    // Build source reference
-    val blobClient = containerClient.getBlobClient(destinationBlobName)
-
-    // Upload the file
-    blobClient.upload(myBlob, myBlob.available().toLong())
-
-    logger.logInformation("Blob $name has been routed to $destinationBlobName")
-}
 }
