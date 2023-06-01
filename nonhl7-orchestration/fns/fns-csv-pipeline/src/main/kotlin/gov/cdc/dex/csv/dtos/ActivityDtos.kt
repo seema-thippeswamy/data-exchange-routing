@@ -1,14 +1,24 @@
 package gov.cdc.dex.csv.dtos
 
 data class ActivityInput (
-    val stepNumber      : String,
-    val config          : Any?,
-    val globalParams    : Map<String,String>,
-    val fanInParams     : List<Map<String,String>>? = null
+    val config  : Any?,
+    val common  : CommonInput
+)
+
+data class CommonInput (
+    val stepNumber  : String,
+    val params      : ActivityParams,
+    val fanInParams : List<ActivityParams>? = null
 )
 
 data class ActivityOutput (
-    val newGlobalParams     : Map<String,String> = mapOf(),
-    val errorMessage        : String? = null,
-    val newFanOutParams     : List<Map<String,String>>? = null
+    val updatedParams   : ActivityParams,
+    val errorMessage    : String? = null,
+    val fanOutParams    : List<ActivityParams>? = null
+)
+
+data class ActivityParams (
+    var originalFileLocation    : String? = null,
+    var currentFileLocation     : String? = null,
+    var errorMessage            : String? = null
 )

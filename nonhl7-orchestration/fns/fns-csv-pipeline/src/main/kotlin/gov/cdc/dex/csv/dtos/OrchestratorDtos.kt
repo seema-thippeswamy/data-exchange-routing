@@ -5,11 +5,12 @@ import com.fasterxml.jackson.annotation.JsonCreator
 
 data class OrchestratorInput(
     val config          : OrchestratorConfiguration,
-    val initialParams   : Map<String,String>
+    val initialParams   : ActivityParams
 )
 
 data class OrchestratorConfiguration (
-    val steps   : List<OrchestratorStep>
+    val steps                   : List<OrchestratorStep>,
+    val globalErrorFunction     : FunctionDefinition
 )
 
 data class OrchestratorStep (
@@ -26,7 +27,7 @@ data class FunctionDefinition(
 )
 
 data class OrchestratorOutput (
-    val outputParams    : Map<String,String>,
+    val outputParams    : ActivityParams,
     val errorMessage    : String? = null,
     val failedStep      : String? = null
 )

@@ -16,6 +16,8 @@ import gov.cdc.dex.csv.dtos.OrchestratorStep
 import gov.cdc.dex.csv.dtos.OrchestratorConfiguration
 import gov.cdc.dex.csv.dtos.RecursiveOrchestratorOutput
 import gov.cdc.dex.csv.dtos.RecursiveOrchestratorInput
+import gov.cdc.dex.csv.dtos.CommonInput
+import gov.cdc.dex.csv.dtos.ActivityParams
 import java.util.logging.Level
 
 class FnOrchestrator {
@@ -52,6 +54,8 @@ class FnOrchestrator {
         }
 
         if(errorMessage != null){
+            val errorInput = ActivityInput(input.config.globalErrorFunction.functionConfiguration, CommonInput("-1", recursiveOutput.output.outputParams))
+            runActivity(taskContext, functionContext, input.config.globalErrorFunction.functionName, errorInput)
             return OrchestratorOutput(recursiveOutput.output.outputParams, errorMessage, failedStep)
         }
         
@@ -66,24 +70,24 @@ class FnOrchestrator {
         val recursiveInput = taskContext.getInput(RecursiveOrchestratorInput::class.java)
 
         val steps = recursiveInput.input.config.steps
-        val globalParamMap = recursiveInput.input.initialParams.toMutableMap()
+        var globalParams = recursiveInput.input.initialParams
 
         var indexToRun = recursiveInput.enterIndex
 
-        var paramsToFanIn:List<Map<String,String>>? = null
+        var paramsToFanIn:List<ActivityParams>? = null
 
         while(indexToRun < steps.size){
             val step = steps[indexToRun]
 
             val stepInput = if(step.fanInBefore && paramsToFanIn == null){
                 //we need to return to the prior level before running this step
-                return RecursiveOrchestratorOutput(OrchestratorOutput(globalParamMap), indexToRun)
+                return RecursiveOrchestratorOutput(OrchestratorOutput(globalParams), indexToRun)
             }else if(step.fanInBefore){
-                val fanInInput = ActivityInput(step.stepNumber, step.functionToRun.functionConfiguration, globalParamMap, paramsToFanIn)
+                val fanInInput = ActivityInput(step.functionToRun.functionConfiguration, CommonInput(step.stepNumber, globalParams, paramsToFanIn))
                 paramsToFanIn = null
                 fanInInput
             }else{
-                ActivityInput(step.stepNumber, step.functionToRun.functionConfiguration, globalParamMap)
+                ActivityInput(step.functionToRun.functionConfiguration, CommonInput(step.stepNumber, globalParams))
             }
 
             //run the step
@@ -92,18 +96,18 @@ class FnOrchestrator {
             //check for errors
             val errorMessage = if(stepOutput.errorMessage!=null){
                 stepOutput.errorMessage
-            }else if(step.fanOutAfter && stepOutput.newFanOutParams == null){
+            }else if(step.fanOutAfter && stepOutput.fanOutParams == null){
                 "Tried to fan out but function did not return correct parameters"
             }else{
                 null
             }
             if(errorMessage != null){
-                runError(taskContext, functionContext, step, globalParamMap, errorMessage)
-                return RecursiveOrchestratorOutput(OrchestratorOutput(globalParamMap, errorMessage, step.stepNumber),indexToRun)
+                runError(taskContext, functionContext, step, globalParams, errorMessage)
+                return RecursiveOrchestratorOutput(OrchestratorOutput(globalParams, errorMessage, step.stepNumber),indexToRun)
             }
 
             //absorb new global parameters, whether fanning out or not
-            globalParamMap.putAll(stepOutput.newGlobalParams)
+            globalParams = stepOutput.updatedParams
 
             //update indexToRun based on whether fanning out or not
             indexToRun = if(!step.fanOutAfter){
@@ -111,11 +115,8 @@ class FnOrchestrator {
             }else{
                 val parallelTasks:MutableList<Task<RecursiveOrchestratorOutput>> = mutableListOf()
                 //fanned out params being null was already checked in the error handling
-                for(fannedOutParamMap in stepOutput.newFanOutParams!!){
-                    val subMap = mutableMapOf<String,String>()
-                    subMap.putAll(globalParamMap)
-                    subMap.putAll(fannedOutParamMap)
-                    val subInput = RecursiveOrchestratorInput(OrchestratorInput(recursiveInput.input.config, subMap),(indexToRun+1))
+                for(fannedOutParams in stepOutput.fanOutParams!!){
+                    val subInput = RecursiveOrchestratorInput(OrchestratorInput(recursiveInput.input.config, fannedOutParams),(indexToRun+1))
                     parallelTasks.add(taskContext.callSubOrchestrator("DexCsvOrchestrator_Recursive", subInput, RecursiveOrchestratorOutput::class.java))
                 }
 
@@ -133,7 +134,7 @@ class FnOrchestrator {
                 }
 
                 if(fanInErrorMessage!=null){
-                    return RecursiveOrchestratorOutput(OrchestratorOutput(globalParamMap, fanInErrorMessage, "Fanned-out starting from ${step.stepNumber}"),fanInIndex)
+                    return RecursiveOrchestratorOutput(OrchestratorOutput(globalParams, fanInErrorMessage, "Fanned-out starting from ${step.stepNumber}"),fanInIndex)
                 }
 
                 //set parameters so the code knows that we are fanning in here, and not returning
@@ -143,7 +144,7 @@ class FnOrchestrator {
                 fanInIndex
             }
         }
-        return RecursiveOrchestratorOutput(OrchestratorOutput(outputParams=globalParamMap),indexToRun)
+        return RecursiveOrchestratorOutput(OrchestratorOutput(outputParams=globalParams),indexToRun)
 
     
     }
@@ -154,18 +155,18 @@ class FnOrchestrator {
         val activityOutput = try{ 
             taskContext.callActivity(functionName, activityInput, ActivityOutput::class.java).await()
         }catch(e:com.microsoft.durabletask.TaskFailedException){
-            log(Level.SEVERE, "Error in step ${activityInput.stepNumber}", e, taskContext, functionContext)
-            ActivityOutput(errorMessage = e.localizedMessage, newGlobalParams = mapOf())
+            log(Level.SEVERE, "Error in step ${activityInput.common.stepNumber}", e, taskContext, functionContext)
+            ActivityOutput(errorMessage = e.localizedMessage, updatedParams = activityInput.common.params)
         }
         return activityOutput;
     }
 
     private fun runError(
-        taskContext:TaskOrchestrationContext, functionContext:ExecutionContext, step:OrchestratorStep, globalParamMap:MutableMap<String,String>, errorMessage:String
+        taskContext:TaskOrchestrationContext, functionContext:ExecutionContext, step:OrchestratorStep, globalParams:ActivityParams, errorMessage:String
     ){
-        globalParamMap.put("errorMessage", errorMessage)
+        globalParams.errorMessage = errorMessage
         val errorFunction = step.customErrorFunction ?: FunctionDefinition(defaultErrorName)
-        val errorInput = ActivityInput(step.stepNumber, errorFunction.functionConfiguration, globalParamMap)
+        val errorInput = ActivityInput(errorFunction.functionConfiguration, CommonInput(step.stepNumber, globalParams))
         runActivity(taskContext, functionContext, errorFunction.functionName, errorInput)
     }
 
