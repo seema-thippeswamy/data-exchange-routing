@@ -106,8 +106,8 @@ class FnOrchestrator {
                 return RecursiveOrchestratorOutput(OrchestratorOutput(globalParams, errorMessage, step.stepNumber),indexToRun)
             }
 
-            //absorb new global parameters, whether fanning out or not
-            globalParams = stepOutput.updatedParams
+            //if global parameters are updated, replace
+            globalParams = stepOutput.updatedParams ?: globalParams
 
             //update indexToRun based on whether fanning out or not
             indexToRun = if(!step.fanOutAfter){

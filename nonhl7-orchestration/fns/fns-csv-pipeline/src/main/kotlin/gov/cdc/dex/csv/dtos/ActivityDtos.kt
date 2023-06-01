@@ -12,13 +12,13 @@ data class CommonInput (
 )
 
 data class ActivityOutput (
-    val updatedParams   : ActivityParams,
+    val updatedParams   : ActivityParams? = null,
     val errorMessage    : String? = null,
     val fanOutParams    : List<ActivityParams>? = null
 )
 
 data class ActivityParams (
-    var originalFileLocation    : String? = null,
-    var currentFileLocation     : String? = null,
-    var errorMessage            : String? = null
+    var originalFileUrl     : String? = null,
+    var currentFileUrl      : String? = null,
+    var errorMessage        : String? = null
 )

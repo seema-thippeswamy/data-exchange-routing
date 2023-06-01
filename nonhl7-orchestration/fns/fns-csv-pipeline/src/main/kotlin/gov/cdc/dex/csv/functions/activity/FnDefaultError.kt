@@ -14,6 +14,6 @@ class FnDefaultError {
         context: ExecutionContext 
     ):ActivityOutput{
         context.logger.severe("Pipeline failed on step ${input.common.stepNumber}, with error message [${input.common.params.errorMessage}]")
-        return ActivityOutput(input.common.params)
+        return ActivityOutput()
     }
 }

@@ -38,11 +38,11 @@ class FnDummyTest {
 
     private fun buildOrchestratorInput():OrchestratorInput{
         val steps = mutableListOf<OrchestratorStep>()
-        steps.add(OrchestratorStep("1", FunctionDefinition("DummyActivity", mapOf("configKey" to "configValue1"))))
+        steps.add(OrchestratorStep("1", FunctionDefinition("DexCsvDecompressor"), fanOutAfter=true))
         steps.add(OrchestratorStep("2", FunctionDefinition("DummyActivity", mapOf("configKey" to "configValue2"))))
 
         val config = OrchestratorConfiguration(steps, FunctionDefinition("DummyActivity", mapOf("configKey" to "configValueError")))
-        val initialParams = ActivityParams("originalFileLocation")
+        val initialParams = ActivityParams(originalFileUrl="https://dexcsvdata001.blob.core.windows.net/processed/test/test-upload-zip.zip")
         return OrchestratorInput(config,initialParams)
     }
 
@@ -50,7 +50,7 @@ class FnDummyTest {
     fun runActivity(@DurableActivityTrigger(name = "input") input:DummyInput,  context:ExecutionContext):ActivityOutput {
        // throw RuntimeException("BLAH")
         context.getLogger().info("Running dummy activity for input $input");
-        input.common.params.originalFileLocation = input.config.configKey
+        input.common.params.currentFileUrl = "${input.config.configKey} - ${input.common.params.currentFileUrl}"
         return ActivityOutput(input.common.params);
     }
 }
