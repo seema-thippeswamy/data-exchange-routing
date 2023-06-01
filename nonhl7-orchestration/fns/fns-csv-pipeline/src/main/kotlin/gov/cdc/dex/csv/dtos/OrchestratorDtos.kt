@@ -9,8 +9,8 @@ data class OrchestratorInput(
 )
 
 data class OrchestratorConfiguration (
-    val steps                   : List<OrchestratorStep>
-    val globalErrorFunction     : FunctionDefinition,
+    val steps                   : List<OrchestratorStep>,
+    val globalErrorFunction     : FunctionDefinition
 )
 
 data class OrchestratorStep (

@@ -41,7 +41,7 @@ class FnDummyTest {
         steps.add(OrchestratorStep("1", FunctionDefinition("DummyActivity", mapOf("configKey" to "configValue1"))))
         steps.add(OrchestratorStep("2", FunctionDefinition("DummyActivity", mapOf("configKey" to "configValue2"))))
 
-        val config = OrchestratorConfiguration(steps)
+        val config = OrchestratorConfiguration(steps, FunctionDefinition("DummyActivity", mapOf("configKey" to "configValueError")))
         val initialParams = ActivityParams("originalFileLocation")
         return OrchestratorInput(config,initialParams)
     }
