@@ -17,6 +17,8 @@ import gov.cdc.dex.csv.dtos.OrchestratorConfiguration
 import gov.cdc.dex.csv.dtos.OrchestratorStep
 import gov.cdc.dex.csv.dtos.FunctionDefinition
 import gov.cdc.dex.csv.dtos.ActivityOutput
+import gov.cdc.dex.csv.dtos.CommonInput
+import gov.cdc.dex.csv.dtos.ActivityParams
 
 import java.util.Optional
 
@@ -40,7 +42,7 @@ class FnDummyTest {
         steps.add(OrchestratorStep("2", FunctionDefinition("DummyActivity", mapOf("configKey" to "configValue2"))))
 
         val config = OrchestratorConfiguration(steps)
-        val initialParams = mapOf("dummyKey1" to "dummyValue1","dummyKey2" to "dummyValue2")
+        val initialParams = ActivityParams("originalFileLocation")
         return OrchestratorInput(config,initialParams)
     }
 
@@ -48,22 +50,17 @@ class FnDummyTest {
     fun runActivity(@DurableActivityTrigger(name = "input") input:DummyInput,  context:ExecutionContext):ActivityOutput {
        // throw RuntimeException("BLAH")
         context.getLogger().info("Running dummy activity for input $input");
-        return ActivityOutput(mapOf(input.config.configKey to input.params.dummyKey1));
+        input.common.params.originalFileLocation = input.config.configKey
+        return ActivityOutput(input.common.params);
     }
 }
 
 
 data class DummyInput(
-    val stepNumber  : String,
-    val config      : DummyConfig,
-    val params      : DummyParams
+    val config  : DummyConfig,
+    val common  : CommonInput
 )
 
 data class DummyConfig(
     val configKey : String
-)
-
-data class DummyParams(
-    val dummyKey1 : String,
-    val dummyKey3 : String
 )
