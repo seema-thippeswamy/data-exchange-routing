@@ -47,6 +47,7 @@ class RouteIngestedFile {
         val messageType = sourceMetadata.getOrDefault("message_type", "?")
         
         // Define destination
+        // val destinationBlobName = getDestination_Extension(sourceBlob.blobName, messageType, routeConfigs, context)
         val destinationBlobName = getDestination_MessageType(sourceBlob.blobName, messageType, routeConfigs, context)
         if(destinationBlobName == null){
             return
@@ -58,7 +59,6 @@ class RouteIngestedFile {
         val destinationCredential = DefaultAzureCredentialBuilder().build();
         val destinationBlobEndpoint = System.getenv("DestinationBlobEndpoint")
         val destinationBlobServiceClient = BlobServiceClientBuilder().endpoint(destinationBlobEndpoint).credential(destinationCredential).buildClient()
-
         val destinationContainerClient = destinationBlobServiceClient.getBlobContainerClient(destinationContainerName)
         val destinationBlob = destinationContainerClient.getBlobClient(destinationBlobName)
 
