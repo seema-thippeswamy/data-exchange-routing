@@ -1,7 +1,7 @@
 package gov.cdc.dex.csv.dtos
 
 data class ActivityInput (
-    val config  : Any?,
+    val config  : Any? = null,
     val common  : CommonInput
 )
 

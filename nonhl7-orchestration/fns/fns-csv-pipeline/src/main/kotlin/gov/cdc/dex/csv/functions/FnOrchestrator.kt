@@ -156,7 +156,7 @@ class FnOrchestrator {
             taskContext.callActivity(functionName, activityInput, ActivityOutput::class.java).await()
         }catch(e:com.microsoft.durabletask.TaskFailedException){
             log(Level.SEVERE, "Error in step ${activityInput.common.stepNumber}", e, taskContext, functionContext)
-            ActivityOutput(errorMessage = e.localizedMessage, updatedParams = activityInput.common.params)
+            ActivityOutput(errorMessage = e.localizedMessage)
         }
         return activityOutput;
     }
