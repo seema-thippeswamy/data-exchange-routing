@@ -18,7 +18,8 @@ data class OrchestratorStep (
     val functionToRun           : FunctionDefinition,
     val customErrorFunction     : FunctionDefinition? = null,
     val fanOutAfter             : Boolean = false,
-    val fanInBefore             : Boolean = false
+    val fanInBefore             : Boolean = false,
+    val fanInFailIfAnyFail      : Boolean = true
 )
 
 data class FunctionDefinition(
@@ -34,7 +35,8 @@ data class OrchestratorOutput (
 
 data class RecursiveOrchestratorInput (
     val input       : OrchestratorInput,
-    val enterIndex  : Int
+    val enterIndex  : Int,
+    val branchIndex : String
 )
 data class RecursiveOrchestratorOutput (
     val output      : OrchestratorOutput,
