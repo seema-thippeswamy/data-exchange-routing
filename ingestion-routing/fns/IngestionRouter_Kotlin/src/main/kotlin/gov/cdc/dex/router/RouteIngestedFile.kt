@@ -14,6 +14,8 @@ import com.azure.storage.blob.BlobClientBuilder
 import com.azure.core.util.BinaryData
 import com.azure.core.credential.TokenCredential
 import com.azure.identity.DefaultAzureCredentialBuilder
+import com.azure.storage.blob.sas.BlobSasPermission
+import com.azure.storage.blob.sas.BlobServiceSasSignatureValues
 
 import java.io.File
 import java.io.BufferedInputStream
@@ -21,6 +23,8 @@ import java.io.BufferedOutputStream
 
 import gov.cdc.dex.router.dtos.RouteConfig
 import gov.cdc.dex.router.dtos.EventSchema
+import java.time.OffsetDateTime
+import java.time.ZoneOffset
 
 class RouteIngestedFile {
     
@@ -31,7 +35,14 @@ class RouteIngestedFile {
     ) {
         context.logger.info("Function triggered for event $eventContent")
         
-        // Define source
+        // Define source (ConnectionString Version)
+        //val sourceUrl = eventContent.data.url
+        //val blobServiceClient = BlobServiceClientBuilder().connectionString(System.getenv("BlobIngestConnectionString")).buildClient();
+        //val containerClient = blobServiceClient.getBlobContainerClient(System.getenv("BlobIngestContainerName"));
+        //val fileName = java.net.URI(sourceUrl).path.split("/").last()
+        //val sourceBlob = containerClient.getBlobClient(fileName);
+
+        //Define source (ServicePrincipal Version)
         val sourceUrl = eventContent.data.url
         val sourceCredential = DefaultAzureCredentialBuilder().build();
         val sourceBlob = BlobClientBuilder().credential(sourceCredential).endpoint(sourceUrl).buildClient()
@@ -45,7 +56,7 @@ class RouteIngestedFile {
             context.logger.severe("Config file is missing or empty, routing cannot continue.")
         }
         val routeConfigs = Gson().fromJson(configJson, Array<RouteConfig>::class.java).toList()
-        
+
         // Find associated config
         var routeConfig = routeConfigs.firstOrNull { it.messageTypes.contains(messageType) }
         if (routeConfig == null) {
@@ -60,20 +71,29 @@ class RouteIngestedFile {
         // Define destination
         val destinationRoute = routeConfig.stagingLocations.destinationContainer
         val destinationBlobName = "$destinationRoute/${sourceBlob.blobName}"
-        val destinationContainerName = "routedfiles"
+        val destinationContainerName = System.getenv("BlobDestinationContainerName")
 
-        // val destinationConnection = System.getenv("DestinationBlobStorageConnection")
-        // val destinationBlobServiceClient = BlobServiceClientBuilder().connectionString(destinationConnection).buildClient()
+        //(ConnectionString Version)
+        //val destinationBlobServiceClient = BlobServiceClientBuilder().connectionString((System.getenv("BlobDestinationConnectionString"))).buildClient();
+        //val destinationContainerClient = destinationBlobServiceClient.getBlobContainerClient(destinationContainerName)
+        //val destinationBlob = destinationContainerClient.getBlobClient(destinationBlobName)
+
+        //(ServicePrincipal Version)
         val destinationCredential = DefaultAzureCredentialBuilder().build();
-        val destinationBlobEndpoint = System.getenv("DestinationBlobEndpoint")
-        val destinationBlobServiceClient = BlobServiceClientBuilder().endpoint(destinationBlobEndpoint).credential(destinationCredential).buildClient()
+        val destinationBlobConnection = System.getenv("BlobDestinationConnectionString")
+        val destinationBlobServiceClient = BlobServiceClientBuilder().endpoint(destinationBlobConnection).credential(destinationCredential).buildClient()
         val destinationContainerClient = destinationBlobServiceClient.getBlobContainerClient(destinationContainerName)
         val destinationBlob = destinationContainerClient.getBlobClient(destinationBlobName)
 
+        //Generate SAS (ConnectionString Version)
+        val sasToken = sourceBlob.generateSas(BlobServiceSasSignatureValues(OffsetDateTime.now(ZoneOffset.UTC).plusHours(1), BlobSasPermission().setReadPermission(true)))
+        val urlWithSAS = "${sourceBlob.blobUrl}?$sasToken"
+
         // Copy from source
-        destinationBlob.blockBlobClient.uploadFromUrl(sourceBlob.blobUrl)
+        destinationBlob.blockBlobClient.copyFromUrl(urlWithSAS)
 
         //Set metadata
+        sourceMetadata["system_provider"] = "DEX-ROUTING"
         destinationBlob.setMetadata(sourceMetadata)
 
         context.logger.info("Blob $sourceUrl has been routed to $destinationBlobName")
