@@ -89,8 +89,8 @@ class FnDecompressor {
         return ActivityOutput(fanOutParams = fanOutParams)
     }
     
-    private fun buildOutputUrl(sourceUrl:String, executionId:String):String{
-        return sourceUrl.replaceFirst("/ingest/", "/$executionId/processed/")
+    private fun buildOutputUrl(sourceUrl:String, executionId:String?):String{
+        return sourceUrl.replaceFirst("ingest/", "processed/$executionId/").replace(".zip","-decompressed/")
     }
 
     private fun decompressFileStream(inputStream:InputStream, outputStreamSupplier: (String) -> OutputStream, outputUrl:String):List<String>{

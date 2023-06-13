@@ -3,6 +3,8 @@
   "Values": {
     "AzureWebJobsStorage": "**scrubbed**",
     "FUNCTIONS_WORKER_RUNTIME": "java",
-    "BlobConnection": "**scrubbed**"
+    "BlobConnection": "**scrubbed**",
+    "EventHubName_Ingest": "**scrubbed**",
+    "EventHubConnection": "**scrubbed**"
   }
 }
