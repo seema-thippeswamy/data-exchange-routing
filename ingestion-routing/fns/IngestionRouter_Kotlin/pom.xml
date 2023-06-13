@@ -21,9 +21,9 @@
 		
         <gson.version>2.10.1</gson.version>
 
-        <functionResourceGroup>cdc-modernization-dex</functionResourceGroup>
-        <functionAppServicePlanName>TODO</functionAppServicePlanName>
-        <functionAppName>dex-ingestion-router</functionAppName>
+        <functionResourceGroup>ocio-ede-dev-moderate-hl7-rg</functionResourceGroup>
+        <functionAppServicePlanName>ocio-ede-dev-routing-service-plan</functionAppServicePlanName>
+        <functionAppName>ocio-ede-dev-routing-processor</functionAppName>
         <functionRegion>eastus</functionRegion>
     </properties>
 
@@ -77,11 +77,26 @@
 			<version>${kotlin.version}</version>
 			<scope>test</scope>
 		</dependency>
+        <dependency>
+            <groupId>org.apache.logging.log4j</groupId>
+            <artifactId>log4j-api</artifactId>
+            <version>2.20.0</version>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.logging.log4j</groupId>
+            <artifactId>log4j-core</artifactId>
+            <version>2.20.0</version>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.logging.log4j</groupId>
+            <artifactId>log4j-slf4j-impl</artifactId>
+            <version>2.20.0</version>
+        </dependency>
     </dependencies>
 
     <build>
         <sourceDirectory>${project.basedir}/src/main/kotlin</sourceDirectory>
-        <testSourceDirectory>${project.basedir}/src/test/kotlin</testSourceDirectory>
+        <!--<testSourceDirectory>${project.basedir}/src/test/kotlin</testSourceDirectory>-->
         <plugins>
             <plugin>
                 <groupId>com.microsoft.azure</groupId>
@@ -93,6 +108,10 @@
                     <resourceGroup>${functionResourceGroup}</resourceGroup>
                     <appServicePlanName>${functionResourceGroup}</appServicePlanName>
                     <region>${functionRegion}</region>
+		    <auth>
+			    <type>service_principal</type>
+			    <serverId>azure-service-principal</serverId>
+		    </auth>
                     <!-- function pricingTier, default to be consumption if not specified -->
                     <!-- refers https://github.com/microsoft/azure-maven-plugins/wiki/Azure-Functions:-Configuration-Details#supported-pricing-tiers for all valid values -->
                     <!-- <pricingTier></pricingTier> -->

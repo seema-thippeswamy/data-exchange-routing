@@ -1,6 +1,7 @@
 [
   {
     "FileType": "CSV",
+    "MessageTypes": [""],
     "StagingLocations": {
       "DestinationContainer": "/data/CSV/staged"
     }
@@ -14,6 +15,7 @@
   },
   {
     "FileType": "?",
+    "MessageTypes": [""],
     "StagingLocations": {
       "DestinationContainer": "/data/misc/staged"
     }
