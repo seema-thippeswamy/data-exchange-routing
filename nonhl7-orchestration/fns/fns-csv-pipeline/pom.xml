@@ -12,14 +12,17 @@
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <java.version>11</java.version>
-        <kotlin.version>1.7.20</kotlin.version>
+        <kotlin.version>1.8.21</kotlin.version>
+        <serialization.version>1.5.1</serialization.version>
 
         <azure.functions.maven.plugin.version>1.24.0</azure.functions.maven.plugin.version>
 		<azure.functions.java.library.version>3.0.0</azure.functions.java.library.version>
 		<durabletask.azure.functions.version>1.1.0</durabletask.azure.functions.version>
         <azure.storage.blob.version>12.22.2</azure.storage.blob.version>
+
 		<jackson.module.kotlin.version>2.12.3</jackson.module.kotlin.version>
-        
+        <gson.version>2.10.1</gson.version>
+
         <functionAppName>dex-csv-fn-app</functionAppName>
         <functionResourceGroup>cdc-modernization-dex</functionResourceGroup>
         <functionAppServicePlanName>ASP-cdcmodernizationdex-bb76</functionAppServicePlanName>
@@ -31,6 +34,11 @@
             <groupId>org.jetbrains.kotlin</groupId>
             <artifactId>kotlin-stdlib</artifactId>
             <version>${kotlin.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.jetbrains.kotlinx</groupId>
+            <artifactId>kotlinx-serialization-json</artifactId>
+            <version>${serialization.version}</version>
         </dependency>
         
         <!-- Azure -->
@@ -49,10 +57,17 @@
             <artifactId>azure-storage-blob</artifactId>
             <version>${azure.storage.blob.version}</version>
         </dependency>
+
+        <!-- Utils -->
         <dependency>
             <groupId>com.fasterxml.jackson.module</groupId>
             <artifactId>jackson-module-kotlin</artifactId>
             <version>${jackson.module.kotlin.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>com.google.code.gson</groupId>
+            <artifactId>gson</artifactId>
+            <version>${gson.version}</version>
         </dependency>
 
         <!-- Test -->
