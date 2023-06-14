@@ -18,6 +18,7 @@ data class ActivityOutput (
 )
 
 data class ActivityParams (
+    val executionId         : String? = null,
     var originalFileUrl     : String? = null,
     var currentFileUrl      : String? = null,
     var errorMessage        : String? = null
