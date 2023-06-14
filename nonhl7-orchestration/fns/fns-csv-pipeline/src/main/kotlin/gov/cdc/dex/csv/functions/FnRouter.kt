@@ -164,7 +164,7 @@ class FnRouter {
         steps.add(OrchestratorStep("2", FunctionDefinition("DummyActivity", mapOf("configKey" to "configValue2"))))
 
         val config = OrchestratorConfiguration(steps, FunctionDefinition("DummyActivity", mapOf("configKey" to "configValueError")))
-        val initialParams = ActivityParams(originalFileUrl=url)
+        val initialParams = ActivityParams(executionId=id, originalFileUrl=url)
         val orchestratorInput = OrchestratorInput(config,initialParams)
         /*
         var orchSteps = List(1, OrchestratorStep)

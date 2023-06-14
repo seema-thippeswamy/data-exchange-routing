@@ -60,7 +60,8 @@ class FnDecompressor {
 
             //TRY blocks are expressions, and variables can be returned out of them
             var writtenPathsZip:List<String> = try{
-                decompressFileStream(downloadStream, uploadStreamSupplier, "${sourceUrl}-decompressed/")
+                val destinationUrl = buildOutputUrl(sourceUrl, input.common.params.executionId)
+                decompressFileStream(downloadStream, uploadStreamSupplier, destinationUrl)
             }catch(e:IOException){
                 context.logger.log(Level.SEVERE, "Error unzipping: $sourceUrl", e)
                 return ActivityOutput(errorMessage = "Error unzipping: $sourceUrl : ${e.localizedMessage}")
@@ -88,6 +89,9 @@ class FnDecompressor {
         return ActivityOutput(fanOutParams = fanOutParams)
     }
     
+    private fun buildOutputUrl(sourceUrl:String, executionId:String?):String{
+        return sourceUrl.replaceFirst("ingest/", "processed/$executionId/").replace(".zip","-decompressed/")
+    }
 
     private fun decompressFileStream(inputStream:InputStream, outputStreamSupplier: (String) -> OutputStream, outputUrl:String):List<String>{
         var writtenPaths : MutableList<String> = mutableListOf();
