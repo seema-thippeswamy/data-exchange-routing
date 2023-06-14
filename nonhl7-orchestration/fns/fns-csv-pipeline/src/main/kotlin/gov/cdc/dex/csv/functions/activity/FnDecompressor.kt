@@ -3,11 +3,12 @@ package gov.cdc.dex.csv.functions.activity
 import com.microsoft.azure.functions.annotation.FunctionName;
 import com.microsoft.azure.functions.ExecutionContext;
 import com.microsoft.durabletask.azurefunctions.DurableActivityTrigger;
-import com.azure.storage.blob.BlobClientBuilder
 
 import gov.cdc.dex.csv.dtos.ActivityInput
 import gov.cdc.dex.csv.dtos.ActivityOutput
 import gov.cdc.dex.csv.dtos.ActivityParams
+import gov.cdc.dex.csv.services.IBlobService
+import gov.cdc.dex.csv.services.AzureBlobServiceImpl
 
 import java.io.BufferedOutputStream
 import java.io.InputStream
@@ -16,45 +17,51 @@ import java.io.OutputStream
 import java.util.zip.ZipInputStream
 import java.util.logging.Level
 
-class FnDecompressor {
-    private val BLOB_CONNECTION_PARAM = "BlobConnection"
-    private val ZIP_TYPES = listOf("application/zip","application/x-zip-compressed")
-    private val BUFFER_SIZE = 4096
-
+class FnDecompressorEntry {
     @FunctionName("DexCsvDecompressor")
-    fun defaultError(
+    fun process(
         @DurableActivityTrigger(name = "input") input: ActivityInput, 
         context: ExecutionContext 
     ):ActivityOutput{
+        val blobConnectionString = System.getenv("BlobConnection") 
+        if(blobConnectionString == null){
+            throw IllegalArgumentException("BlobConnection Environment variable not defined")
+        }
+        val blobService = AzureBlobServiceImpl(blobConnectionString)
+
+        return FnDecompressor().process(input, context, blobService)
+    }
+}
+
+class FnDecompressor {
+    private val ZIP_TYPES = listOf("application/zip","application/x-zip-compressed")
+    private val BUFFER_SIZE = 4096
+
+    fun process(input: ActivityInput, context: ExecutionContext, blobService:IBlobService):ActivityOutput{
         context.getLogger().info("Running decompressor for input $input");
         val sourceUrl = input.common.params.originalFileUrl
-        if(sourceUrl == null){
+        if(sourceUrl.isNullOrBlank()){
             return ActivityOutput(errorMessage = "No source URL provided!")
         }
-        val blobConnection = System.getenv(BLOB_CONNECTION_PARAM)
-        val sourceBlob = BlobClientBuilder().connectionString(blobConnection).endpoint(sourceUrl).buildClient()
-
         //check for file existence
-        if(!sourceBlob.exists()){
+        if(!blobService.exists(sourceUrl)){
             return ActivityOutput(errorMessage = "File missing in Azure! $sourceUrl")
         }
 
-        val contentType = sourceBlob.properties.contentType
+        val contentType = blobService.getProperties(sourceUrl).contentType
 
         //IF blocks are expressions, and variables can be returned out of them
         var writtenUrls:List<String> = if(ZIP_TYPES.contains(contentType)){
             //if ZIP, then unzip and capture the files that were contained
 
             //stream from the existing zip, and immediately stream the unzipped data back to a new file in processed
-            var downloadStream = sourceBlob.openInputStream()
-            var uploadStreamSupplier = {destinationUrl:String ->
-                val destinationBlob = BlobClientBuilder().connectionString(blobConnection).endpoint(destinationUrl).buildClient()
-                destinationBlob.blockBlobClient.getBlobOutputStream()
-            }
+            var downloadStream = blobService.openDownloadStream(sourceUrl)
+            var uploadStreamSupplier = {destinationUrl:String -> blobService.openUploadStream(destinationUrl)}
 
             //TRY blocks are expressions, and variables can be returned out of them
             var writtenPathsZip:List<String> = try{
-                decompressFileStream(downloadStream, uploadStreamSupplier, "${sourceUrl}-decompressed/")
+                val destinationUrl = buildOutputUrl(sourceUrl, input.common.params.executionId)
+                decompressFileStream(downloadStream, uploadStreamSupplier, destinationUrl)
             }catch(e:IOException){
                 context.logger.log(Level.SEVERE, "Error unzipping: $sourceUrl", e)
                 return ActivityOutput(errorMessage = "Error unzipping: $sourceUrl : ${e.localizedMessage}")
@@ -62,7 +69,7 @@ class FnDecompressor {
 
             if(writtenPathsZip.isEmpty()){
                 //fail if zip file was empty
-                return ActivityOutput(input.common.params, "Zipped file was empty: $sourceUrl")
+                return ActivityOutput(errorMessage = "Zipped file was empty: $sourceUrl")
             }
 
             //return the written paths to the IF statement, to be assigned to variable there
@@ -82,6 +89,9 @@ class FnDecompressor {
         return ActivityOutput(fanOutParams = fanOutParams)
     }
     
+    private fun buildOutputUrl(sourceUrl:String, executionId:String?):String{
+        return sourceUrl.replaceFirst("ingest/", "processed/$executionId/").replace(".zip","-decompressed/")
+    }
 
     private fun decompressFileStream(inputStream:InputStream, outputStreamSupplier: (String) -> OutputStream, outputUrl:String):List<String>{
         var writtenPaths : MutableList<String> = mutableListOf();

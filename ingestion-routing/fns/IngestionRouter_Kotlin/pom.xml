@@ -17,6 +17,8 @@
         <gson.version>2.10.1</gson.version>
         <functionResourceGroup>ocio-ede-dev-moderate-hl7-rg</functionResourceGroup>
         <functionServicePlan>ocio-ede-dev-routing-service-plan</functionServicePlan>
+        <functionResourceGroup>ocio-ede-dev-moderate-hl7-rg</functionResourceGroup>
+        <functionAppServicePlanName>ocio-ede-dev-routing-service-plan</functionAppServicePlanName>
         <functionAppName>ocio-ede-dev-routing-processor</functionAppName>
         <functionRegion>eastus</functionRegion>
     </properties>
@@ -102,7 +104,6 @@
                     <resourceGroup>${functionResourceGroup}</resourceGroup>
                     <appServicePlanName>${functionServicePlan}</appServicePlanName>
                     <region>${functionRegion}</region>
-
                     <auth>
                         <type>service_principal</type>
                         <serverId>azure-service-principal</serverId>
