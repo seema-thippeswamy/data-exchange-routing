@@ -1,26 +1,22 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
-
     <groupId>gov.cdc.dataexchange.router</groupId>
     <artifactId>fns-ingestion-router</artifactId>
     <version>1.0-SNAPSHOT</version>
     <packaging>jar</packaging>
-
     <name>DEX Fns-Router-Pipeline</name>
-
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <java.version>11</java.version>
         <kotlin.version>1.7.20</kotlin.version>
-
         <azure.functions.maven.plugin.version>1.24.0</azure.functions.maven.plugin.version>
         <azure.storage.blob.version>12.22.2</azure.storage.blob.version>
         <azure.identity.version>1.9.0</azure.identity.version>
         <azure.functions.java.library.version>3.0.0</azure.functions.java.library.version>
-		
         <gson.version>2.10.1</gson.version>
-
+        <functionResourceGroup>ocio-ede-dev-moderate-hl7-rg</functionResourceGroup>
+        <functionServicePlan>ocio-ede-dev-routing-service-plan</functionServicePlan>
         <functionResourceGroup>ocio-ede-dev-moderate-hl7-rg</functionResourceGroup>
         <functionAppServicePlanName>ocio-ede-dev-routing-service-plan</functionAppServicePlanName>
         <functionAppName>ocio-ede-dev-routing-processor</functionAppName>
@@ -106,12 +102,12 @@
 					<!-- https://github.com/microsoft/azure-maven-plugins/wiki/Azure-Functions:-Configuration-Details -->
                     <appName>${functionAppName}</appName>
                     <resourceGroup>${functionResourceGroup}</resourceGroup>
-                    <appServicePlanName>${functionResourceGroup}</appServicePlanName>
+                    <appServicePlanName>${functionServicePlan}</appServicePlanName>
                     <region>${functionRegion}</region>
-		    <auth>
-			    <type>service_principal</type>
-			    <serverId>azure-service-principal</serverId>
-		    </auth>
+                    <auth>
+                        <type>service_principal</type>
+                        <serverId>azure-service-principal</serverId>
+                    </auth>
                     <!-- function pricingTier, default to be consumption if not specified -->
                     <!-- refers https://github.com/microsoft/azure-maven-plugins/wiki/Azure-Functions:-Configuration-Details#supported-pricing-tiers for all valid values -->
                     <!-- <pricingTier></pricingTier> -->
@@ -120,13 +116,17 @@
                     <!-- <disableAppInsights></disableAppInsights> -->
                     <runtime>
                         <!-- runtime os, could be windows, linux or docker-->
-                        <os>windows</os>
+                        <os>linux</os>
                         <javaVersion>11</javaVersion>
                     </runtime>
                     <appSettings>
                         <property>
                             <name>FUNCTIONS_EXTENSION_VERSION</name>
                             <value>~4</value>
+                        </property>
+                        <property>
+                            <name>FUNCTIONS_WORKER_RUNTIME</name>
+                            <value>java</value>
                         </property>
                     </appSettings>
                 </configuration>
