@@ -10,7 +10,6 @@ import com.microsoft.azure.functions.ExecutionContext
 import com.microsoft.durabletask.azurefunctions.DurableClientInput
 import com.microsoft.durabletask.azurefunctions.DurableClientContext
 import com.microsoft.durabletask.azurefunctions.DurableActivityTrigger
-import com.microsoft.durabletask.DurableTaskClient
 
 import gov.cdc.dex.csv.dtos.OrchestratorInput
 import gov.cdc.dex.csv.dtos.OrchestratorConfiguration
