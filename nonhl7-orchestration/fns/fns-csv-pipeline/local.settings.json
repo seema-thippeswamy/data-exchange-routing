@@ -5,6 +5,7 @@
     "FUNCTIONS_WORKER_RUNTIME": "java",
     "BlobConnection": "**scrubbed**",
     "EventHubName_Ingest": "**scrubbed**",
-    "EventHubConnection": "**scrubbed**"
+    "EventHubConnection": "**scrubbed**",
+    "BaseConfigUrl": "**scrubbed**"
   }
 }

@@ -138,7 +138,7 @@ class FnRouter {
         val orchestratorInput = OrchestratorInput(orchestratorConfig, ActivityParams(executionId=id,originalFileUrl=ingestUrl))
         
         //start orchestrator
-        val instanceId = durableContext.getClient().scheduleNewOrchestrationInstance("DexCsvOrchestrator",orchestratorInput);
+        val instanceId = durableContext.client.scheduleNewOrchestrationInstance("DexCsvOrchestrator",orchestratorInput);
         context.logger.log(Level.INFO, "Created new Java orchestration with instance ID = $instanceId");
 
         return null;
