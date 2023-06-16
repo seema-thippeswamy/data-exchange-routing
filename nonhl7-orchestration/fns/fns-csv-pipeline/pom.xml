@@ -25,8 +25,7 @@
 
         <functionAppName>dex-csv-fn-app</functionAppName>
         <functionResourceGroup>cdc-modernization-dex</functionResourceGroup>
-        <!-- <functionAppServicePlanName>ASP-cdcmodernizationdex-bb76</functionAppServicePlanName> -->
-        <functionAppServicePlanName>ASP-cdcmodernizationdex-a06c</functionAppServicePlanName>
+        <functionAppServicePlanName>ASP-cdcmodernizationdex-bb76</functionAppServicePlanName>
         <functionRegion>eastus</functionRegion>
     </properties>
 
