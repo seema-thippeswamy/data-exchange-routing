@@ -63,12 +63,12 @@ class FnRouter {
         @DurableClientInput(name = "durableContext") durableContext:DurableClientContext,
         context: ExecutionContext
     ) {
-        context.logger.log(Level.SEVERE,"Router received event: $message");
+        context.getLogger().log(Level.SEVERE,"Router received event: $message");
 
         //TODO: May be needed in future iteration
 
         if(message.isEmpty()){
-            context.logger.log(Level.SEVERE, "Empty Azure message")
+            context.getLogger().log(Level.SEVERE, "Empty Azure message")
             //TODO: SEND FAILURE
             return
         }
@@ -77,7 +77,7 @@ class FnRouter {
         val events:Array<AzureBlobCreateEventMessage> = try{
             gson.fromJson(message, Array<AzureBlobCreateEventMessage>::class.java)
         }catch(e:Exception){
-            context.logger.log(Level.SEVERE, "Error parsing Azure message: e")
+            context.getLogger().log(Level.SEVERE, "Error parsing Azure message: e")
             //TODO: SEND FAILURE
             return
         }
@@ -86,11 +86,11 @@ class FnRouter {
 
         // ensure message received is blob creation
         if ( event.eventType != BLOB_CREATED) {
-            context.logger.log(Level.SEVERE,"Recieved non-created message type $event.eventType")
+            context.getLogger().log(Level.SEVERE,"Recieved non-created message type $event.eventType")
             return;
         }
 
-        context.logger.info("Received BLOB_CREATED event: --> $event")
+        context.getLogger().log(Level.INFO,"Received BLOB_CREATED event: --> $event")
 
         //check required event parameters
         val id = event.id
@@ -99,14 +99,14 @@ class FnRouter {
         val url = event.evHubData?.url
 
         if(id==null || contentType==null || contentLength==null || url==null){
-            context.logger.log(Level.SEVERE,"Event missing required parameter(s)");
+            context.getLogger().log(Level.SEVERE,"Event missing required parameter(s)");
             //TODO: SEND FAILURE
             return;
         }
 
         val ingestFileName = getFilenameFromUrl(url)
         if(ingestFileName == null){
-                context.logger.log(Level.SEVERE, "Error with event URL: $url");
+                context.getLogger().log(Level.SEVERE, "Error with event URL: $url");
                 //TODO: SEND FAILURE
         }
 
@@ -114,7 +114,7 @@ class FnRouter {
         
         //check for file existence
         if(!sourceBlob.exists()){
-            context.logger.log(Level.SEVERE, "File not found: $url")
+            context.getLogger().log(Level.SEVERE, "File not found: $url")
             //TODO: SEND FAILURE
         }
 
@@ -128,7 +128,7 @@ class FnRouter {
             //val routerConfigData = routerConfigBytes.toString(Charsets.UTF_8)
             //val routerConfigs = gson.fromJson(routerconfigData, Array<FileConfiguration>::class.java)
         } catch (e:IOException) {
-            context.logger.log(Level.SEVERE, "Error reading from $ROUTER_CONFIG_URL");
+            context.getLogger().log(Level.SEVERE, "Error reading from $ROUTER_CONFIG_URL");
             return;
         }
 
@@ -142,7 +142,7 @@ class FnRouter {
         }*/
 
         if(!found){
-            context.logger.log(Level.SEVERE, "Router config match not found: $ingestFileName.substring(0,10)")
+            context.getLogger().log(Level.SEVERE, "Router config match not found: $ingestFileName.substring(0,10)")
             return;
         }
 
@@ -158,7 +158,7 @@ class FnRouter {
             return
         }*/
 
-        val orchestratorInput = parseOrchestratorConfig("") //TODO: Modify to pass proper param (ORCHESTRATOR_CONFIG_URL+orchConfigFileName)
+        val orchestratorInput = parseOrchestratorConfig(id, url) //TODO: Modify to pass proper param (ORCHESTRATOR_CONFIG_URL+orchConfigFileName)
         val client = durableContext.getClient();
         val instanceId = client.scheduleNewOrchestrationInstance("DexCsvOrchestrator",orchestratorInput);
 
@@ -181,14 +181,14 @@ class FnRouter {
         //TODO: Move code back down from above
     }*/
 
-    private fun parseOrchestratorConfig(data:String):OrchestratorInput{
+    private fun parseOrchestratorConfig(id:String,url:String):OrchestratorInput{
         //TODO: Move code back down from above, remove hard-coding below
         val steps = mutableListOf<OrchestratorStep>()
         steps.add(OrchestratorStep("1", FunctionDefinition("DexCsvDecompressor"), fanOutAfter=true))
         steps.add(OrchestratorStep("2", FunctionDefinition("DummyActivity", mapOf("configKey" to "configValue2"))))
 
         val config = OrchestratorConfiguration(steps, FunctionDefinition("DummyActivity", mapOf("configKey" to "configValueError")))
-        val initialParams = ActivityParams(originalFileUrl="https://dexcsvdata001.blob.core.windows.net/processed/test/test-upload-zip.zip")
+        val initialParams = ActivityParams(executionId=id,originalFileUrl=url)
         return OrchestratorInput(config,initialParams)
     }
 }

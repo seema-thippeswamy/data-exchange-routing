@@ -63,7 +63,7 @@ class FnDecompressor {
                 val destinationUrl = buildOutputUrl(sourceUrl, input.common.params.executionId)
                 decompressFileStream(downloadStream, uploadStreamSupplier, destinationUrl)
             }catch(e:IOException){
-                context.logger.log(Level.SEVERE, "Error unzipping: $sourceUrl", e)
+                context.getLogger().log(Level.SEVERE, "Error unzipping: $sourceUrl", e)
                 return ActivityOutput(errorMessage = "Error unzipping: $sourceUrl : ${e.localizedMessage}")
             }
 
