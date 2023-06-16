@@ -63,12 +63,12 @@ class FnRouter {
         @DurableClientInput(name = "durableContext") durableContext:DurableClientContext,
         context: ExecutionContext
     ) {
-        context.getLogger().log(Level.SEVERE,"Router received event: $message");
+        context.logger.log(Level.INFO,"Router received event: $message");
 
         //TODO: May be needed in future iteration
 
         if(message.isEmpty()){
-            context.getLogger().log(Level.SEVERE, "Empty Azure message")
+            context.logger.log(Level.SEVERE, "Empty Azure message")
             //TODO: SEND FAILURE
             return
         }
@@ -77,7 +77,7 @@ class FnRouter {
         val events:Array<AzureBlobCreateEventMessage> = try{
             gson.fromJson(message, Array<AzureBlobCreateEventMessage>::class.java)
         }catch(e:Exception){
-            context.getLogger().log(Level.SEVERE, "Error parsing Azure message: e")
+            context.logger.log(Level.SEVERE, "Error parsing Azure message: e")
             //TODO: SEND FAILURE
             return
         }
@@ -86,11 +86,11 @@ class FnRouter {
 
         // ensure message received is blob creation
         if ( event.eventType != BLOB_CREATED) {
-            context.getLogger().log(Level.SEVERE,"Recieved non-created message type $event.eventType")
+            context.logger.log(Level.SEVERE,"Recieved non-created message type $event.eventType")
             return;
         }
 
-        context.getLogger().log(Level.INFO,"Received BLOB_CREATED event: --> $event")
+        context.logger.log(Level.INFO,"Received BLOB_CREATED event: --> $event")
 
         //check required event parameters
         val id = event.id
@@ -99,14 +99,14 @@ class FnRouter {
         val url = event.evHubData?.url
 
         if(id==null || contentType==null || contentLength==null || url==null){
-            context.getLogger().log(Level.SEVERE,"Event missing required parameter(s)");
+            context.logger.log(Level.SEVERE,"Event missing required parameter(s)");
             //TODO: SEND FAILURE
             return;
         }
 
         val ingestFileName = getFilenameFromUrl(url)
         if(ingestFileName == null){
-                context.getLogger().log(Level.SEVERE, "Error with event URL: $url");
+                context.logger.log(Level.SEVERE, "Error with event URL: $url");
                 //TODO: SEND FAILURE
         }
 
@@ -114,7 +114,7 @@ class FnRouter {
         
         //check for file existence
         if(!sourceBlob.exists()){
-            context.getLogger().log(Level.SEVERE, "File not found: $url")
+            context.logger.log(Level.SEVERE, "File not found: $url")
             //TODO: SEND FAILURE
         }
 
@@ -128,7 +128,7 @@ class FnRouter {
             //val routerConfigData = routerConfigBytes.toString(Charsets.UTF_8)
             //val routerConfigs = gson.fromJson(routerconfigData, Array<FileConfiguration>::class.java)
         } catch (e:IOException) {
-            context.getLogger().log(Level.SEVERE, "Error reading from $ROUTER_CONFIG_URL");
+            context.logger.log(Level.SEVERE, "Error reading from $ROUTER_CONFIG_URL");
             return;
         }
 
@@ -142,7 +142,7 @@ class FnRouter {
         }*/
 
         if(!found){
-            context.getLogger().log(Level.SEVERE, "Router config match not found: $ingestFileName.substring(0,10)")
+            context.logger.log(Level.SEVERE, "Router config match not found: $ingestFileName.substring(0,10)")
             return;
         }
 
@@ -162,7 +162,7 @@ class FnRouter {
         val client = durableContext.getClient();
         val instanceId = client.scheduleNewOrchestrationInstance("DexCsvOrchestrator",orchestratorInput);
 
-        context.getLogger().info("Created new Java orchestration with instance ID = " + instanceId);
+        context.logger.log(Level.INFO,"Created new Java orchestration with instance ID = " + instanceId);
 
         return;
 

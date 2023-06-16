@@ -32,7 +32,7 @@ class FnCSVValidationGeneric {
 
     fun process(input: ActivityInput, context: ExecutionContext, blobService:IBlobService): ActivityOutput { 
                 
-        context.getLogger().info("Running CSV Validator (Generic) for input $input");
+        context.logger.log(Level.INFO,"Running CSV Validator (Generic) for input $input");
 
         val sourceUrl = input.common.params.originalFileUrl
 

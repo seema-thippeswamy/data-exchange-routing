@@ -103,7 +103,7 @@ class FnOrchestrator {
                 null
             }
             if(errorMessage != null){
-                functionContext.getLogger().severe("Step ${stepNumber} had error $errorMessage")
+                log(level=Level.SEVERE, msg="Step ${stepNumber} had error $errorMessage", taskContext=taskContext, functionContext=functionContext)
                 globalParams.errorMessage = errorMessage
                 if(step.customErrorFunction != null){
                     val errorInput = ActivityInput(step.customErrorFunction.functionConfiguration, CommonInput(stepNumber, globalParams))
@@ -199,9 +199,9 @@ class FnOrchestrator {
     ){
         if (!taskContext.getIsReplaying()) {
             if(thrown == null){
-                functionContext.getLogger().log(level, msg);
+                functionContext.logger.log(level, msg);
             } else{
-                functionContext.getLogger().log(level, msg, thrown);
+                functionContext.logger.log(level, msg, thrown);
             }
         }
     }

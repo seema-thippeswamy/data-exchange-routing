@@ -38,7 +38,7 @@ class FnDecompressor {
     private val BUFFER_SIZE = 4096
 
     fun process(input: ActivityInput, context: ExecutionContext, blobService:IBlobService):ActivityOutput{
-        context.getLogger().info("Running decompressor for input $input");
+        context.logger.log(Level.INFO,"Running decompressor for input $input");
         val sourceUrl = input.common.params.originalFileUrl
         if(sourceUrl.isNullOrBlank()){
             return ActivityOutput(errorMessage = "No source URL provided!")
@@ -63,7 +63,7 @@ class FnDecompressor {
                 val destinationUrl = buildOutputUrl(sourceUrl, input.common.params.executionId)
                 decompressFileStream(downloadStream, uploadStreamSupplier, destinationUrl)
             }catch(e:IOException){
-                context.getLogger().log(Level.SEVERE, "Error unzipping: $sourceUrl", e)
+                context.logger.log(Level.SEVERE, "Error unzipping: $sourceUrl", e)
                 return ActivityOutput(errorMessage = "Error unzipping: $sourceUrl : ${e.localizedMessage}")
             }
 
