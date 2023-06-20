@@ -9,7 +9,7 @@ import gov.cdc.dex.csv.dtos.ActivityOutput
 import gov.cdc.dex.csv.dtos.ActivityParams
 import gov.cdc.dex.csv.services.IBlobService
 import gov.cdc.dex.csv.services.AzureBlobServiceImpl
-import gov.cdc.dex.csv.constants.EnvironmentParams
+import gov.cdc.dex.csv.constants.EnvironmentParam
 
 import java.io.BufferedOutputStream
 import java.io.InputStream
@@ -24,10 +24,7 @@ class FnDecompressorEntry {
         @DurableActivityTrigger(name = "input") input: ActivityInput, 
         context: ExecutionContext 
     ):ActivityOutput{
-        val blobConnectionString = System.getenv(EnvironmentParams.INGEST_BLOB_CONNECTION_PARAM) 
-        if(blobConnectionString == null){
-            throw IllegalArgumentException("${EnvironmentParams.INGEST_BLOB_CONNECTION_PARAM} Environment variable not defined")
-        }
+        val blobConnectionString = EnvironmentParam.INGEST_BLOB_CONNECTION.getSystemValue()
         val blobService = AzureBlobServiceImpl(blobConnectionString)
 
         return FnDecompressor().process(input, context, blobService)

@@ -37,15 +37,11 @@ internal class Unit_FnRouter {
     //happy path
     @Test
     internal fun happyPath(){
-        val event = mockEvent(id="happyPath", url="test-upload.csv")
-        val durableContext = mockClientContext()
-        val context = ContextMocker.mockExecutionContext()
-        val ingestBlobService = BlobServiceMocker.mockBlobService(ingestParentDir, metadata=mapOf("messageType" to "happyPath", "messageVersion" to "DUMMY"))
-        val configBlobService = BlobServiceMocker.mockBlobService(configParentDir)
-        val baseConfigUrl = ""
-        
-        val response = FnRouter().pipelineEntry(event, durableContext, context, ingestBlobService, configBlobService, baseConfigUrl)
-        Assertions.assertNull(response)
+        val input = createInput(id="happyPath", url="test-upload.csv", messageType="happyPath", messageVersion="DUMMY")
+        val response = FnRouter().pipelineEntry(input)
+        Assertions.assertNotNull(response)
+        Assertions.assertNull(response.errorMessage)
+        Assertions.assertEquals("MOCK_ID",response.orchestratorId)
         Assertions.assertEquals(1, ranOrchestrations.size, "wrong number of orchestrations triggered")
 
         val orchInput = ranOrchestrations.get(0)
@@ -68,18 +64,38 @@ internal class Unit_FnRouter {
     }
     
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-    //a lot of negative testing
+    //TODO a lot of negative testing
     //- trigger each error message in FnRouter
     //- malform routerConfig (missing fields, extra fields, bad structure, etc)
     //- malform orch config (missing fields, extra fields, bad structure, etc)
     
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     //helper functions
-    
-    private fun mockEvent(id:String?, url:String?, eventType:String? = "Microsoft.Storage.BlobCreated"):AzureBlobCreateEventMessage{
-        return AzureBlobCreateEventMessage(eventType, id, EvHubData(url))
-    }
 
+    private fun createInput(
+        id:String?=null, 
+        url:String?=null, 
+        messageType:String?=null, 
+        messageVersion:String?=null, 
+        eventType:String? = "Microsoft.Storage.BlobCreated", 
+        baseConfigUrl:String = ""
+    ):RouterInput{
+        val metadata = mutableMapOf<String,String>()
+        if(messageType!=null){
+            metadata.put("messageType", messageType)
+        }
+        if(messageVersion!=null){
+            metadata.put("messageVersion", messageVersion)
+        }
+        return RouterInput(
+            AzureBlobCreateEventMessage(eventType, id, EvHubData(url)), 
+            mockClientContext(), 
+            ContextMocker.mockExecutionContext(), 
+            BlobServiceMocker.mockBlobService(ingestParentDir, metadata=metadata), 
+            BlobServiceMocker.mockBlobService(configParentDir), 
+            baseConfigUrl)
+    }
+    
     private fun mockClientContext():DurableClientContext{
         val mockContext : DurableClientContext = Mockito.mock(DurableClientContext::class.java)
         Mockito.`when`(mockContext.client).thenAnswer({mockClient()})
