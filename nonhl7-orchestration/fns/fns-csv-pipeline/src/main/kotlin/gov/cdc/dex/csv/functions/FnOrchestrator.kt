@@ -100,7 +100,7 @@ class FnOrchestrator {
                 null
             }
             if(errorMessage != null){
-                functionContext.logger.severe("Step ${stepNumber} had error $errorMessage")
+                log(level=Level.SEVERE, msg="Step ${stepNumber} had error $errorMessage", taskContext=taskContext, functionContext=functionContext)
                 globalParams.errorMessage = errorMessage
                 if(step.customErrorFunction != null){
                     val errorInput = ActivityInput(step.customErrorFunction.functionConfiguration, CommonInput(stepNumber, globalParams))

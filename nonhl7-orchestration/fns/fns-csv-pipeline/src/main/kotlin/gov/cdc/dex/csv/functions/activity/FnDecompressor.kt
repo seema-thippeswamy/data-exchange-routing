@@ -39,7 +39,7 @@ class FnDecompressor {
     private val BUFFER_SIZE = 4096
 
     fun process(input: ActivityInput, context: ExecutionContext, blobService:IBlobService):ActivityOutput{
-        context.getLogger().info("Running decompressor for input $input");
+        context.logger.log(Level.INFO,"Running decompressor for input $input");
         val sourceUrl = input.common.params.originalFileUrl
         if(sourceUrl.isNullOrBlank()){
             return ActivityOutput(errorMessage = "No source URL provided!")
