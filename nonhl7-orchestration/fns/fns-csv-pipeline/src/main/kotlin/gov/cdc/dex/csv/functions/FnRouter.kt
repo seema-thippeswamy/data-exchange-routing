@@ -7,6 +7,8 @@ import com.microsoft.azure.functions.annotation.Cardinality
 import com.microsoft.durabletask.Task
 import com.microsoft.durabletask.azurefunctions.DurableClientInput
 import com.microsoft.durabletask.azurefunctions.DurableClientContext
+import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
+import com.fasterxml.jackson.module.kotlin.readValue
 
 import gov.cdc.dex.csv.dtos.ActivityParams
 import gov.cdc.dex.csv.dtos.AzureBlobCreateEventMessage
@@ -16,15 +18,13 @@ import gov.cdc.dex.csv.dtos.RouterConfiguration
 import gov.cdc.dex.csv.constants.EnvironmentParams
 import gov.cdc.dex.csv.services.AzureBlobServiceImpl
 import gov.cdc.dex.csv.services.IBlobService
-import gov.cdc.dex.csv.services.JsonParseService
 
 import java.io.InputStream
+import java.io.BufferedReader
 import java.util.logging.Level
 
 class FnRouterEntry {
-    private val ORCHESTRATOR_CONFIG_URL = "https://dexcsvdata001.blob.core.windows.net/configurations/orchestrator/"
-    
-    
+
     // TODO: This Trigger needs to be replaced with whatever the ingestion router will use to send us the information
     @FunctionName("DexCsvRouter")
     fun pipelineEntry(
@@ -67,6 +67,7 @@ class FnRouterEntry {
 
 class FnRouter {
     private val BLOB_CREATED_EVENT_TYPE = "Microsoft.Storage.BlobCreated"
+    private val jsonParser = jacksonObjectMapper()
 
     fun pipelineEntry(
         event: AzureBlobCreateEventMessage,
@@ -103,9 +104,8 @@ class FnRouter {
         
         //parse router file
         val configList = try{
-            configBlobService.openDownloadStream(routerConfigUrl).use{
-                JsonParseService.parse<List<RouterConfiguration>>(it)
-            }
+            val content = configBlobService.openDownloadStream(routerConfigUrl).bufferedReader().use(BufferedReader::readText)
+            jsonParser.readValue<List<RouterConfiguration>>(content) 
         }catch(e:Exception){
             context.logger.log(Level.SEVERE,"Could not parse router config", e)
             return "Error parsing router config file $routerConfigUrl : ${e.message}"
@@ -126,9 +126,8 @@ class FnRouter {
 
         //parse orchestrator config
         val orchestratorConfig = try{
-            configBlobService.openDownloadStream(orchestratorConfigUrl).use{
-                JsonParseService.parse<OrchestratorConfiguration>(it)
-            }
+            val orchContent = configBlobService.openDownloadStream(orchestratorConfigUrl).bufferedReader().use(BufferedReader::readText)
+            jsonParser.readValue<OrchestratorConfiguration>(orchContent) 
         }catch(e:Exception){
             context.logger.log(Level.SEVERE,"Could not parse orchestrator config", e)
             return "Error parsing orchestrator config file $routerConfigUrl : ${e.message}"

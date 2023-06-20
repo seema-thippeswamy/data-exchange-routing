@@ -8,6 +8,10 @@ import gov.cdc.dex.csv.ContextMocker
 import gov.cdc.dex.csv.dtos.AzureBlobCreateEventMessage
 import gov.cdc.dex.csv.dtos.EvHubData
 import gov.cdc.dex.csv.dtos.OrchestratorInput
+import gov.cdc.dex.csv.dtos.OrchestratorConfiguration
+import gov.cdc.dex.csv.dtos.ActivityParams
+import gov.cdc.dex.csv.dtos.FunctionDefinition
+import gov.cdc.dex.csv.dtos.OrchestratorStep
 
 import java.io.File
 
@@ -36,15 +40,38 @@ internal class Unit_FnRouter {
         val event = mockEvent(id="happyPath", url="test-upload.csv")
         val durableContext = mockClientContext()
         val context = ContextMocker.mockExecutionContext()
-        val ingestBlobService = BlobServiceMocker.mockBlobService(ingestParentDir)
+        val ingestBlobService = BlobServiceMocker.mockBlobService(ingestParentDir, metadata=mapOf("messageType" to "happyPath", "messageVersion" to "DUMMY"))
         val configBlobService = BlobServiceMocker.mockBlobService(configParentDir)
         val baseConfigUrl = ""
         
         val response = FnRouter().pipelineEntry(event, durableContext, context, ingestBlobService, configBlobService, baseConfigUrl)
         Assertions.assertNull(response)
+        Assertions.assertEquals(1, ranOrchestrations.size, "wrong number of orchestrations triggered")
 
-        TODO("asserts on the ran orchestration")
+        val orchInput = ranOrchestrations.get(0)
+        Assertions.assertEquals(OrchestratorInput(
+            config=OrchestratorConfiguration(
+                steps=listOf(
+                    OrchestratorStep(
+                        stepNumber="1",
+                        functionToRun=FunctionDefinition(functionName="1-functionToRun")
+                    )
+                ),
+                globalErrorFunction=FunctionDefinition(functionName="globalErrorFunction")
+            ),
+            initialParams=ActivityParams(
+                executionId="happyPath",
+                originalFileUrl="test-upload.csv"
+            )
+        ), orchInput)
+
     }
+    
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    //a lot of negative testing
+    //- trigger each error message in FnRouter
+    //- malform routerConfig (missing fields, extra fields, bad structure, etc)
+    //- malform orch config (missing fields, extra fields, bad structure, etc)
     
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     //helper functions
@@ -61,7 +88,7 @@ internal class Unit_FnRouter {
 
     private fun mockClient():DurableTaskClient{
         val mockClient : DurableTaskClient = Mockito.mock(DurableTaskClient::class.java)
-        Mockito.`when`(mockClient.scheduleNewOrchestrationInstance(Mockito.anyString(),Mockito.any()))
+        Mockito.`when`(mockClient.scheduleNewOrchestrationInstance(Mockito.anyString(),Mockito.any(Object::class.java)))
             .thenAnswer({mockOrchestration(it.getArgument(1))})
         return mockClient
     }
