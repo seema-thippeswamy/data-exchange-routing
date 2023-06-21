@@ -31,7 +31,7 @@ class FnCSVValidationGeneric {
                 
         context.logger.log(Level.INFO,"Running CSV Validator (Generic) for input $input");
 
-        val sourceUrl = input.common.params.originalFileUrl
+        val sourceUrl = input.common.params.currentFileUrl
 
         if(sourceUrl.isNullOrBlank()){
             return ActivityOutput(errorMessage = "No source URL provided!")

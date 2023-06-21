@@ -33,8 +33,7 @@ class FnRouterEntry {
             name = "msg", 
             eventHubName = "%EventHubName_Ingest%",
             connection = "EventHubConnection")
-            event: AzureBlobCreateEventMessage,
-            //might be array            events: Array<AzureBlobCreateEventMessage>,
+            events: List<AzureBlobCreateEventMessage>,
         @DurableClientInput(name = "durableContext") durableContext:DurableClientContext,
         context: ExecutionContext
     ) {
@@ -46,15 +45,19 @@ class FnRouterEntry {
         
         val baseConfigUrl = EnvironmentParam.BASE_CONFIG_URL.getSystemValue() 
         
-        //might be array            val event:AzureBlobCreateEventMessage = events.get(0)
+        //TODO do we need to handle multiple in same trigger? Is that even a thing?
+        val event:AzureBlobCreateEventMessage = events.get(0)
         val input = RouterInput(event, durableContext, context, ingestBlobService, configBlobService, baseConfigUrl)
         val output = FnRouter().pipelineEntry(input)
         if(output.errorMessage!=null){
             context.logger.log(Level.SEVERE,output.errorMessage)
             TODO("handle the error")
-        }
-        if(output.orchestratorId!=null){
-            TODO("handle successful routing")
+        } else if(output.orchestratorId!=null){
+            context.logger.log(Level.INFO, "Orchestrator kicked off with ID ${output.orchestratorId}")
+            //TODO handle successful routing
+        } else {
+            context.logger.log(Level.SEVERE,"Not sure what happened, both error and orchestrator ID were null... shouldn't be possible....")
+            TODO("handle the error")
         }
     }
 }
@@ -75,7 +78,7 @@ class FnRouter {
 
         //check required event parameters
         val id = input.event.id
-        val ingestUrl = input.event.evHubData?.url
+        val ingestUrl = input.event.data?.url
         if(id==null || ingestUrl==null){
             return RouterOutput(errorMessage="Event missing required parameter(s)")
         }

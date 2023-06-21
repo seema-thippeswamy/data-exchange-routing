@@ -4,7 +4,7 @@ package gov.cdc.dex.csv.dtos
 data class AzureBlobCreateEventMessage (
     val eventType : String?,
     val id        : String?,
-    val evHubData : EvHubData?
+    val data      : EvHubData?
 )
 
 data class EvHubData (
