@@ -4,191 +4,161 @@ import com.microsoft.azure.functions.ExecutionContext
 import com.microsoft.azure.functions.annotation.FunctionName
 import com.microsoft.azure.functions.annotation.EventHubTrigger
 import com.microsoft.azure.functions.annotation.Cardinality
-
 import com.microsoft.durabletask.Task
-import com.microsoft.durabletask.TaskOrchestrationContext
-import com.microsoft.durabletask.azurefunctions.DurableOrchestrationTrigger
-import com.microsoft.durabletask.azurefunctions.DurableActivityTrigger
 import com.microsoft.durabletask.azurefunctions.DurableClientInput
 import com.microsoft.durabletask.azurefunctions.DurableClientContext
+import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
+import com.fasterxml.jackson.module.kotlin.readValue
 
-import com.azure.storage.blob.BlobClient
-import com.azure.storage.blob.BlobClientBuilder
-import com.azure.storage.blob.BlobContainerClient
-import com.azure.storage.blob.specialized.BlobInputStream
-import com.azure.storage.blob.BlobServiceClient
-import com.azure.storage.blob.BlobServiceClientBuilder
-
-import com.google.gson.Gson
-import com.google.gson.GsonBuilder
-import com.google.gson.ToNumberPolicy
-import com.google.gson.JsonSyntaxException
-
-import gov.cdc.dex.csv.dtos.ActivityInput
-import gov.cdc.dex.csv.dtos.ActivityOutput
 import gov.cdc.dex.csv.dtos.ActivityParams
 import gov.cdc.dex.csv.dtos.AzureBlobCreateEventMessage
-import gov.cdc.dex.csv.dtos.CommonInput
-import gov.cdc.dex.csv.dtos.FunctionDefinition
 import gov.cdc.dex.csv.dtos.OrchestratorInput
-import gov.cdc.dex.csv.dtos.OrchestratorStep
 import gov.cdc.dex.csv.dtos.OrchestratorConfiguration
-import gov.cdc.dex.csv.dtos.RecursiveOrchestratorOutput
-import gov.cdc.dex.csv.dtos.RecursiveOrchestratorInput
 import gov.cdc.dex.csv.dtos.RouterConfiguration
+import gov.cdc.dex.csv.constants.EnvironmentParam
+import gov.cdc.dex.csv.services.AzureBlobServiceImpl
+import gov.cdc.dex.csv.services.IBlobService
 
-import java.io.IOException
 import java.io.InputStream
-import java.io.BufferedInputStream
+import java.io.BufferedReader
 import java.util.logging.Level
 
-class FnRouter {
-    private val BLOB_CONNECTION_PARAM = "BlobConnection"
-    private val BLOB_CREATED = "Microsoft.Storage.BlobCreated"
-    private val gson = GsonBuilder().setObjectToNumberStrategy(ToNumberPolicy.LONG_OR_DOUBLE).create()
-    private val ROUTER_CONFIG_URL = "https://dexcsvdata001.blob.core.windows.net/configurations/router/routerconfig.json"
-    private val ORCHESTRATOR_CONFIG_URL = "https://dexcsvdata001.blob.core.windows.net/configurations/orchestrator/"
-    private val blobConnection = System.getenv(BLOB_CONNECTION_PARAM)
-
+class FnRouterEntry {
 
     // TODO: This Trigger needs to be replaced with whatever the ingestion router will use to send us the information
-    @FunctionName("DexNonHL7Router")
-    fun DexNonHL7Router(
+    @FunctionName("DexCsvRouter")
+    fun pipelineEntry(
         @EventHubTrigger(
             cardinality = Cardinality.ONE,
             name = "msg", 
             eventHubName = "%EventHubName_Ingest%",
             connection = "EventHubConnection")
-        message: String,
+            events: List<AzureBlobCreateEventMessage>,
         @DurableClientInput(name = "durableContext") durableContext:DurableClientContext,
         context: ExecutionContext
     ) {
-        context.logger.log(Level.SEVERE,"Router received event: $message");
-
-        //TODO: May be needed in future iteration
-
-        if(message.isEmpty()){
-            context.logger.log(Level.SEVERE, "Empty Azure message")
-            //TODO: SEND FAILURE
-            return
-        }
-
-        // parse the message usable objects
-        val events:Array<AzureBlobCreateEventMessage> = try{
-            gson.fromJson(message, Array<AzureBlobCreateEventMessage>::class.java)
-        }catch(e:Exception){
-            context.logger.log(Level.SEVERE, "Error parsing Azure message: e")
-            //TODO: SEND FAILURE
-            return
-        }
-
-        val event:AzureBlobCreateEventMessage = events.get(0)
-
-        // ensure message received is blob creation
-        if ( event.eventType != BLOB_CREATED) {
-            context.logger.log(Level.SEVERE,"Recieved non-created message type $event.eventType")
-            return;
-        }
-
-        context.logger.info("Received BLOB_CREATED event: --> $event")
-
-        //check required event parameters
-        val id = event.id
-        val contentType = event.evHubData?.contentType
-        val contentLength = event.evHubData?.contentLength
-        val url = event.evHubData?.url
-
-        if(id==null || contentType==null || contentLength==null || url==null){
-            context.logger.log(Level.SEVERE,"Event missing required parameter(s)");
-            //TODO: SEND FAILURE
-            return;
-        }
-
-        val ingestFileName = getFilenameFromUrl(url)
-        if(ingestFileName == null){
-                context.logger.log(Level.SEVERE, "Error with event URL: $url");
-                //TODO: SEND FAILURE
-        }
-
-        val sourceBlob:BlobClient = BlobClientBuilder().connectionString(blobConnection).endpoint(url).buildClient()
+        val ingestBlobConnectionString = EnvironmentParam.INGEST_BLOB_CONNECTION.getSystemValue()
+        val ingestBlobService = AzureBlobServiceImpl(ingestBlobConnectionString)
         
-        //check for file existence
-        if(!sourceBlob.exists()){
-            context.logger.log(Level.SEVERE, "File not found: $url")
-            //TODO: SEND FAILURE
+        val configBlobConnectionString = EnvironmentParam.CONFIG_BLOB_CONNECTION.getSystemValue()
+        val configBlobService = AzureBlobServiceImpl(configBlobConnectionString)
+        
+        val baseConfigUrl = EnvironmentParam.BASE_CONFIG_URL.getSystemValue() 
+        
+        //TODO do we need to handle multiple in same trigger? Is that even a thing?
+        val event:AzureBlobCreateEventMessage = events.get(0)
+        val input = RouterInput(event, durableContext, context, ingestBlobService, configBlobService, baseConfigUrl)
+        val output = FnRouter().pipelineEntry(input)
+        if(output.errorMessage!=null){
+            context.logger.log(Level.SEVERE,output.errorMessage)
+            TODO("handle the error")
+        } else if(output.orchestratorId!=null){
+            context.logger.log(Level.INFO, "Orchestrator kicked off with ID ${output.orchestratorId}")
+            //TODO handle successful routing
+        } else {
+            context.logger.log(Level.SEVERE,"Not sure what happened, both error and orchestrator ID were null... shouldn't be possible....")
+            TODO("handle the error")
         }
-
-        //TODO: The message parse will need to be edited to conform to the message from the ingestion router when that is avail
-        val routerConfigBlob:BlobClient = BlobClientBuilder().connectionString(blobConnection).endpoint(ROUTER_CONFIG_URL).buildClient()
-        try{
-            // Convert JSON File to Java Object
-
-            //var reader:BlobInputStream = routerConfigBlob.openInputStream()
-            //reader.read(routerConfigBytes, reader.getProperties().getBlobSize(),0)
-            //val routerConfigData = routerConfigBytes.toString(Charsets.UTF_8)
-            //val routerConfigs = gson.fromJson(routerconfigData, Array<FileConfiguration>::class.java)
-        } catch (e:IOException) {
-            context.logger.log(Level.SEVERE, "Error reading from $ROUTER_CONFIG_URL");
-            return;
-        }
-
-        var i = 0
-        var found = true //TODO: change back to false when parsing is fixed
-        //TODO: this is a temporary comparison, will have to be replaced with data from the event from ingestion router
-        /*val routerConfig = while(routerConfigs[i].messageType != ingestFileName.substring(0,10) && i < FileConfiguration.size()-1){
-            i++
-            found = true
-            return routerConfigs[i]
-        }*/
-
-        if(!found){
-            context.logger.log(Level.SEVERE, "Router config match not found: $ingestFileName.substring(0,10)")
-            return;
-        }
-
-        //val orchConfigFileName = parseRouterConfig(ingestFileName,ingestFileName.substring(0,10))
-
-        /*val orchConfigBlob:BlobClient = BlobClientBuilder().connectionString(BLOB_CONNECTION_PARAM).endpoint(ORCHESTRATOR_CONFIG_URL+orchConfigFileName);
-        try{
-            var orchConfigReader:BlobInputStream = orchConfigBlob.openInputStream()
-            // Convert JSON File to Java Object 
-            val orchConfig:OrchestratorConfiguration = gson.fromJson(orchConfigReader, OrchestratorConfiguration::class.java)
-        } catch (e:IOException) {
-            context.logger.log(Level.SEVERE, "Error reading from $ORCHESTRATOR_CONFIG_URL $routerConfig.configurationFileName")
-            return
-        }*/
-
-        val orchestratorInput = parseOrchestratorConfig("") //TODO: Modify to pass proper param (ORCHESTRATOR_CONFIG_URL+orchConfigFileName)
-        val client = durableContext.getClient();
-        val instanceId = client.scheduleNewOrchestrationInstance("DexCsvOrchestrator",orchestratorInput);
-
-        context.getLogger().info("Created new Java orchestration with instance ID = " + instanceId);
-
-        return;
-
-    }
-
-    private fun getFilenameFromUrl(url:String):String{
-        //assume url is formatted "http://domain/container/pathA/pathB/fileName.something"
-        //want the return as <"pathA/pathB","fileName.something">
-
-        val urlArray = url.split("/");
-        var file = urlArray[urlArray.size-1];
-        return file;
-    }
-
-    /*private fun parseRouterConfig(fileType:String,fileVersion:String):routerConfiguration{
-        //TODO: Move code back down from above
-    }*/
-
-    private fun parseOrchestratorConfig(data:String):OrchestratorInput{
-        //TODO: Move code back down from above, remove hard-coding below
-        val steps = mutableListOf<OrchestratorStep>()
-        steps.add(OrchestratorStep("1", FunctionDefinition("DexCsvDecompressor"), fanOutAfter=true))
-        steps.add(OrchestratorStep("2", FunctionDefinition("DummyActivity", mapOf("configKey" to "configValue2"))))
-
-        val config = OrchestratorConfiguration(steps, FunctionDefinition("DummyActivity", mapOf("configKey" to "configValueError")))
-        val initialParams = ActivityParams(originalFileUrl="https://dexcsvdata001.blob.core.windows.net/processed/test/test-upload-zip.zip")
-        return OrchestratorInput(config,initialParams)
     }
 }
+
+
+
+class FnRouter {
+    private val BLOB_CREATED_EVENT_TYPE = "Microsoft.Storage.BlobCreated"
+    private val jsonParser = jacksonObjectMapper()
+
+    fun pipelineEntry(input:RouterInput):RouterOutput {
+        // ensure message received is blob creation
+        if ( input.event.eventType != BLOB_CREATED_EVENT_TYPE) {
+            return RouterOutput(errorMessage="Recieved non-created message type $input.event.eventType")
+        }
+
+        input.context.logger.log(Level.INFO,"Received BLOB_CREATED event: --> $input.event")
+
+        //check required event parameters
+        val id = input.event.id
+        val ingestUrl = input.event.data?.url
+        if(id==null || ingestUrl==null){
+            return RouterOutput(errorMessage="Event missing required parameter(s)")
+        }
+
+        //check for ingest file existence
+        if(!input.ingestBlobService.exists(ingestUrl)){
+            return RouterOutput(errorMessage="Ingest file not found: $ingestUrl")
+        }
+
+        //check for router file existence
+        val routerConfigUrl = input.baseConfigUrl+"routerConfig.json"
+        if(!input.configBlobService.exists(routerConfigUrl)){
+            return RouterOutput(errorMessage="Router config file not found: $routerConfigUrl")
+        }
+        
+        //parse router file
+        val configList = try{
+            val content = input.configBlobService.openDownloadStream(routerConfigUrl).bufferedReader().use(BufferedReader::readText)
+            jsonParser.readValue<List<RouterConfiguration>>(content) 
+        }catch(e:Exception){
+            input.context.logger.log(Level.SEVERE,"Could not parse router config", e)
+            return RouterOutput(errorMessage="Error parsing router config file $routerConfigUrl : ${e.message}")
+        }
+
+        //pull router config associated with the ingest file
+        val ingestMetadata = input.ingestBlobService.getProperties(ingestUrl).metadata
+        val routerConfig = pullRouterConfig(ingestMetadata, configList)
+        if(routerConfig==null){
+            return RouterOutput(errorMessage="Router config match not found for file $ingestUrl with metadata $ingestMetadata")
+        }
+
+        //check for orchestrator config existence
+        val orchestratorConfigUrl = "${input.baseConfigUrl}orchestrator/${routerConfig.configurationFileName}"
+        if(!input.configBlobService.exists(orchestratorConfigUrl)){
+            return RouterOutput(errorMessage="Orchestrator config file not found: $orchestratorConfigUrl")
+        }
+
+        //parse orchestrator config
+        val orchestratorConfig = try{
+            val orchContent = input.configBlobService.openDownloadStream(orchestratorConfigUrl).bufferedReader().use(BufferedReader::readText)
+            jsonParser.readValue<OrchestratorConfiguration>(orchContent) 
+        }catch(e:Exception){
+            input.context.logger.log(Level.SEVERE,"Could not parse orchestrator config", e)
+            return RouterOutput(errorMessage="Error parsing orchestrator config file $routerConfigUrl : ${e.message}")
+        }
+        
+        //build input
+        val orchestratorInput = OrchestratorInput(orchestratorConfig, ActivityParams(executionId=id,originalFileUrl=ingestUrl))
+        
+        //start orchestrator
+        val instanceId = input.durableContext.client.scheduleNewOrchestrationInstance("DexCsvOrchestrator",orchestratorInput);
+        input.context.logger.log(Level.INFO, "Created new Java orchestration with instance ID = $instanceId");
+
+        return RouterOutput(orchestratorId=instanceId);
+    }
+
+    private fun pullRouterConfig(ingestMetadata:Map<String,String>, configList:List<RouterConfiguration>):RouterConfiguration?{
+        val ingestMessageType = ingestMetadata.get("messageType")
+        val ingestMessageVersion = ingestMetadata.get("messageVersion")
+        for(config in configList){
+            if(config.messageType==ingestMessageType && config.messageVersion==ingestMessageVersion){
+                return config
+            }
+        }
+
+        //if get to end, no config was found
+        return null
+    }
+}
+
+data class RouterInput(
+    val event               : AzureBlobCreateEventMessage,
+    val durableContext      : DurableClientContext,
+    val context             : ExecutionContext, 
+    val ingestBlobService   : IBlobService, 
+    val configBlobService   : IBlobService,
+    val baseConfigUrl       : String
+)
+
+data class RouterOutput(
+    val errorMessage    : String?=null,
+    val orchestratorId  : String?=null
+)

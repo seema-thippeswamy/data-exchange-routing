@@ -9,6 +9,7 @@ import gov.cdc.dex.csv.dtos.ActivityInput
 import gov.cdc.dex.csv.dtos.ActivityParams
 import gov.cdc.dex.csv.dtos.CommonInput
 import gov.cdc.dex.csv.services.IBlobService
+import gov.cdc.dex.csv.BlobServiceMocker
 
 import java.io.File
 import java.io.InputStream
@@ -29,9 +30,7 @@ import org.mockito.invocation.InvocationOnMock
 
 internal class Unit_FnDecompressor {
     companion object{
-        private val parentDir = File("target/test-output/"+LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMddHHmmssSSSSS")))
-        private val ingestParentDir = File(parentDir, "ingest")
-        private val processedParentDir = File(parentDir, "processed")
+        private val parentDir = File("target/test-output/Unit_FnDecompressor/"+LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMddHHmmssSSSSS")))
     }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -40,7 +39,7 @@ internal class Unit_FnDecompressor {
     internal fun happyPath_singleCsv(){
         val inputUrl = moveToIngest("test-upload.csv","happyPath_singleCsv")
         val input = ActivityInput(common=CommonInput("happyPath_singleCsv", ActivityParams(executionId="happyPath_singleCsv", originalFileUrl = inputUrl)))
-        val response = FnDecompressor().process(input, ContextMocker.mockExecutionContext(), mockBlobService())
+        val response = FnDecompressor().process(input, ContextMocker.mockExecutionContext(), BlobServiceMocker.mockBlobService(parentDir, ))
         Assertions.assertNull(response.updatedParams)
         Assertions.assertNull(response.errorMessage)
 
@@ -54,7 +53,7 @@ internal class Unit_FnDecompressor {
     internal fun happyPath_zip(){
         val inputUrl = moveToIngest("test-upload-zip.zip","happyPath_zip")
         val input = ActivityInput(common=CommonInput("happyPath_zip", ActivityParams(executionId="happyPath_zip", originalFileUrl = inputUrl)))
-        val response = FnDecompressor().process(input, ContextMocker.mockExecutionContext(), mockBlobService("application/zip"))
+        val response = FnDecompressor().process(input, ContextMocker.mockExecutionContext(), BlobServiceMocker.mockBlobService(parentDir, "application/zip"))
         Assertions.assertNull(response.updatedParams)
         Assertions.assertNull(response.errorMessage)
 
@@ -88,7 +87,7 @@ internal class Unit_FnDecompressor {
     @Test
     internal fun negative_url_null(){
         val input = ActivityInput(common=CommonInput("negative_url_null", ActivityParams()))
-        val response = FnDecompressor().process(input, ContextMocker.mockExecutionContext(), mockBlobService())
+        val response = FnDecompressor().process(input, ContextMocker.mockExecutionContext(), BlobServiceMocker.mockBlobService(parentDir))
         Assertions.assertEquals("No source URL provided!", response.errorMessage)
         Assertions.assertNull(response.updatedParams)
         Assertions.assertNull(response.fanOutParams)
@@ -97,7 +96,7 @@ internal class Unit_FnDecompressor {
     @Test
     internal fun negative_url_empty(){
         val input = ActivityInput(common=CommonInput("negative_url_empty", ActivityParams(executionId="negative_url_empty", originalFileUrl = "")))
-        val response = FnDecompressor().process(input, ContextMocker.mockExecutionContext(), mockBlobService())
+        val response = FnDecompressor().process(input, ContextMocker.mockExecutionContext(), BlobServiceMocker.mockBlobService(parentDir))
         Assertions.assertEquals("No source URL provided!", response.errorMessage)
         Assertions.assertNull(response.updatedParams)
         Assertions.assertNull(response.fanOutParams)
@@ -106,7 +105,7 @@ internal class Unit_FnDecompressor {
     @Test
     internal fun negative_url_notFound(){
         val input = ActivityInput(common=CommonInput("negative_url_notFound", ActivityParams(executionId="negative_url_notFound", originalFileUrl = "some-other-file.csv")))
-        val response = FnDecompressor().process(input, ContextMocker.mockExecutionContext(), mockBlobService())
+        val response = FnDecompressor().process(input, ContextMocker.mockExecutionContext(), BlobServiceMocker.mockBlobService(parentDir))
         Assertions.assertEquals("File missing in Azure! some-other-file.csv", response.errorMessage)
         Assertions.assertNull(response.updatedParams)
         Assertions.assertNull(response.fanOutParams)
@@ -119,7 +118,7 @@ internal class Unit_FnDecompressor {
     internal fun negative_file_unableToZip(){
         val inputUrl = moveToIngest("test-upload.csv","negative_file_unableToZip")
         val input = ActivityInput(common=CommonInput("negative_file_unableToZip", ActivityParams(executionId="negative_file_unableToZip", originalFileUrl = inputUrl)))
-        val response = FnDecompressor().process(input, ContextMocker.mockExecutionContext(), mockBlobService("application/zip"))
+        val response = FnDecompressor().process(input, ContextMocker.mockExecutionContext(), BlobServiceMocker.mockBlobService(parentDir, "application/zip"))
         Assertions.assertEquals("Zipped file was empty: ingest/negative_file_unableToZip/test-upload.csv", response.errorMessage)
         Assertions.assertNull(response.updatedParams)
         Assertions.assertNull(response.fanOutParams)
@@ -129,7 +128,7 @@ internal class Unit_FnDecompressor {
     internal fun negative_file_emptyZip(){
         val inputUrl = moveToIngest("test-empty.zip","negative_file_emptyZip")
         val input = ActivityInput(common=CommonInput("negative_file_emptyZip", ActivityParams(executionId="negative_file_emptyZip", originalFileUrl = inputUrl)))
-        val response = FnDecompressor().process(input, ContextMocker.mockExecutionContext(), mockBlobService("application/zip"))
+        val response = FnDecompressor().process(input, ContextMocker.mockExecutionContext(), BlobServiceMocker.mockBlobService(parentDir, "application/zip"))
         Assertions.assertEquals("Zipped file was empty: ingest/negative_file_emptyZip/test-empty.zip", response.errorMessage)
         Assertions.assertNull(response.updatedParams)
         Assertions.assertNull(response.fanOutParams)
@@ -140,47 +139,11 @@ internal class Unit_FnDecompressor {
     
     private fun moveToIngest(fileName:String, testName:String):String{
         var localFileIn = File("src/test/resources/testfiles",fileName)
-        var localFileOut = File(File(ingestParentDir,testName),fileName)
+        var localFileOut = File(File(File(parentDir, "ingest"),testName),fileName)
         
         localFileOut.parentFile.mkdirs()
         localFileIn.copyTo(localFileOut)
 
         return "ingest/$testName/$fileName"
-    }
-
-    private fun mockBlobService(contentType:String = "DUMMY_CONTENT"):IBlobService{
-        val mockBlobService = Mockito.mock(IBlobService::class.java)
-
-        Mockito.`when`(mockBlobService.exists(Mockito.anyString())).thenAnswer(this::doesTestFileExist)
-        Mockito.`when`(mockBlobService.getProperties(Mockito.anyString())).thenAnswer({getBlobProperties(it, contentType)})
-        Mockito.`when`(mockBlobService.openDownloadStream(Mockito.anyString())).thenAnswer(this::openInputStream)
-        Mockito.`when`(mockBlobService.openUploadStream(Mockito.anyString())).thenAnswer(this::openOutputStream)
-
-        return mockBlobService
-    }
-
-    private fun doesTestFileExist(i: InvocationOnMock):Boolean{
-        val relativePath:String = i.getArgument(0)
-        var localFile = File(parentDir,relativePath)
-        return localFile.exists()
-    }
-
-    private fun getBlobProperties(i: InvocationOnMock, contentType:String):BlobProperties{
-        val relativePath:String = i.getArgument(0)
-
-        return BlobProperties(null, null, null, -1, contentType, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null)
-    }
-
-    private fun openInputStream(i: InvocationOnMock):InputStream{
-        val relativePath:String = i.getArgument(0)
-        var localFile = File(parentDir,relativePath)
-        return FileInputStream(localFile)
-    }
-
-    private fun openOutputStream(i: InvocationOnMock):OutputStream{
-        val relativePath:String = i.getArgument(0)
-        var localFile = File(parentDir,relativePath)
-        localFile.parentFile.mkdirs()
-        return FileOutputStream(localFile)
     }
 }
