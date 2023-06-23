@@ -5,19 +5,16 @@ import com.microsoft.azure.functions.annotation.FunctionName
 import com.microsoft.durabletask.Task
 import com.microsoft.durabletask.TaskOrchestrationContext
 import com.microsoft.durabletask.azurefunctions.DurableOrchestrationTrigger
-import com.microsoft.durabletask.azurefunctions.DurableActivityTrigger
 
 import gov.cdc.dex.csv.dtos.ActivityInput
 import gov.cdc.dex.csv.dtos.ActivityOutput
-import gov.cdc.dex.csv.dtos.FunctionDefinition
 import gov.cdc.dex.csv.dtos.OrchestratorInput
 import gov.cdc.dex.csv.dtos.OrchestratorOutput
-import gov.cdc.dex.csv.dtos.OrchestratorStep
-import gov.cdc.dex.csv.dtos.OrchestratorConfiguration
 import gov.cdc.dex.csv.dtos.RecursiveOrchestratorOutput
 import gov.cdc.dex.csv.dtos.RecursiveOrchestratorInput
 import gov.cdc.dex.csv.dtos.CommonInput
 import gov.cdc.dex.csv.dtos.ActivityParams
+
 import java.util.logging.Level
 
 class FnOrchestrator {
@@ -103,7 +100,7 @@ class FnOrchestrator {
                 null
             }
             if(errorMessage != null){
-                functionContext.logger.severe("Step ${stepNumber} had error $errorMessage")
+                log(level=Level.SEVERE, msg="Step ${stepNumber} had error $errorMessage", taskContext=taskContext, functionContext=functionContext)
                 globalParams.errorMessage = errorMessage
                 if(step.customErrorFunction != null){
                     val errorInput = ActivityInput(step.customErrorFunction.functionConfiguration, CommonInput(stepNumber, globalParams))

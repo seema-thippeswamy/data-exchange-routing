@@ -1,8 +1,5 @@
 package gov.cdc.dex.csv.dtos
 
-import com.fasterxml.jackson.annotation.JsonCreator
-
-
 data class OrchestratorInput(
     val config          : OrchestratorConfiguration,
     val initialParams   : ActivityParams
